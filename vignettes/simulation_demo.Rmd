@@ -1,0 +1,51 @@
+---
+title: "simulation_demo"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{simulation_demo}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(augMultiSynth)
+```
+
+\`\`\`{r} set.seed(1)
+
+res \<- run_demo( N = 2000, T = 200, M = 3, treated_eval = 300, L = 30,
+K = 10, max_donors = 800 )
+
+# Existing metrics (k=0)
+
+res$cor
+res$rmse
+
+# New metrics: average over event times 1..K
+
+res$avg_1K$cor_avg_1K res$avg_1K$rmse_avg_1K
+
+# Multisynth-like pooling (Option B): estimated nu per outcome
+
+res$shrink$nu
+
+# Compare unit-level avg(1:K) correlation before vs after shrinkage
+
+m \<- 1 cor(res$avg_1K$tau_hat_avg_1K[, m], res$avg_1K$tau_true_avg_1K[,
+m]) cor(res$shrink$theta_shrunk[, m], res$avg_1K$tau_true_avg_1K[, m])
+
+# Quick sanity check
+
+\`\`\`{r, eval=FALSE} m \<- 1 plot(res$avg_1K$tau_true_avg_1K[, m],
+res$avg_1K$tau_hat_avg_1K[, m], xlab = "True avg tau (k=1..K)", ylab =
+"Estimated avg tau (k=1..K)") abline(0, 1)
