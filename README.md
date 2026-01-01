@@ -4,14 +4,15 @@
 <!-- badges: start -->
 <!-- badges: end -->
 
-Multi-outcome augmented synthetic control for staggered adoption designs.
+Multi-outcome augmented synthetic control for staggered adoption designs. 
+This package is under development.
 
 ## Installation
 
 You can install the development version of augMultiSynth like so:
 
 ``` r
-devtools::install_github("YOUR_GITHUB_USERNAME/augMultiSynth")
+devtools::install_github("andrebonfrer/augMultiSynth")
 ```
 
 ## Example
@@ -43,5 +44,6 @@ From the repository root:
 library(augMultiSynth)
 
 source("scripts/sim_example.R")
-This is a basic example which shows you how to solve a common problem:
+This is a basic example which shows you how to run staggered synthetic control,
+producing individual treatment effects (and/or their weights). 
 
