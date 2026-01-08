@@ -23,29 +23,68 @@ library(augMultiSynth)
 
 \`\`\`{r} set.seed(1)
 
-res \<- run_demo( N = 2000, T = 200, M = 3, treated_eval = 300, L = 30,
-K = 10, max_donors = 800 )
+res <- run_demo(
+  N = 800,
+  T = 120,
+  M = 3,
+  treated_eval = 150,
+  L = 25,
+  K = 8,
+  max_donors = 400,
+  intercept = "outcome",
+  standardize_outcomes = TRUE,
+  pooled_adjustment = TRUE,
+  nu = 1
+)
+
 
 # Existing metrics (k=0)
 
 res$cor
 res$rmse
 
-# New metrics: average over event times 1..K
-
-res$avg_1K$cor_avg_1K res$avg_1K$rmse_avg_1K
+# average over event times 1..K
+res$avg_1K$cor_avg_1K
+res$avg_1K$rmse_avg_1K
 
 # Multisynth-like pooling (Option B): estimated nu per outcome
 
-res$shrink$nu
+res$shrink$nu_details
 
 # Compare unit-level avg(1:K) correlation before vs after shrinkage
 
 m \<- 1 cor(res$avg_1K$tau_hat_avg_1K[, m], res$avg_1K$tau_true_avg_1K[,
 m]) cor(res$shrink$theta_shrunk[, m], res$avg_1K$tau_true_avg_1K[, m])
 
+tau_hat <- res$avg_1K$tau_hat_avg_1K
+tau_true <- res$avg_1K$tau_true_avg_1K
+
+stopifnot(all(dim(tau_hat) == dim(tau_true)))
+M \<- ncol(tau_hat)
+
 # Quick sanity check
 
-\`\`\`{r, eval=FALSE} m \<- 1 plot(res$avg_1K$tau_true_avg_1K[, m],
-res$avg_1K$tau_hat_avg_1K[, m], xlab = "True avg tau (k=1..K)", ylab =
-"Estimated avg tau (k=1..K)") abline(0, 1)
+\`\`\`{r, eval=FALSE} 
+
+op <- par(mfrow = c(1, M), mar = c(4,4,3,1))
+for (m in 1:M) {
+  x <- tau_true[, m]
+  y <- tau_hat[, m]
+  
+  ok <- is.finite(x) & is.finite(y)
+  x <- x[ok]; y <- y[ok]
+  
+  plot(x, y,
+       xlab = "True avg tau (k=1..K)",
+       ylab = "Estimated avg tau (k=1..K)",
+       main = paste0("Outcome ", m))
+  abline(0, 1, lty = 2)
+  
+# annotate with correlation and RMSE
+  r <- if (length(x) >= 3) cor(x, y) else NA_real_
+  rmse <- sqrt(mean((y - x)^2))
+  mtext(sprintf("cor=%.3f  rmse=%.3f", r, rmse), side = 3, line = 0.2, cex = 0.85)
+}
+par(op)
+
+
