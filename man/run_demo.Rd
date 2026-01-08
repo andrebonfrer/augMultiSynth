@@ -14,7 +14,6 @@ run_demo(
   max_donors = 800,
   screen_outcome = 1,
   screen_method = c("cor", "mse"),
-  demean = TRUE,
   lambda = 0.001,
   solver = c("fw"),
   pooled_adjustment = FALSE,
@@ -22,8 +21,10 @@ run_demo(
   use_shrinkage = TRUE,
   seed = 1,
   verbose = FALSE,
-  outcome_specific_intercepts = TRUE,
+  intercept = c("none", "global", "outcome"),
   standardize_outcomes = FALSE,
+  outcome_weights = NULL,
+  time_weights = NULL,
   eps_sd = 1e-08
 )
 }
@@ -36,7 +37,7 @@ run_demo(
 
 \item{treated_eval}{Integer. Number of treated units to evaluate (subset of treated).}
 
-\item{L}{Integer. Number of pre-treatment periods used for weights and intercept shifts.}
+\item{L}{Integer. Number of pre-treatment periods used for weights and intercept handling.}
 
 \item{K}{Integer. Maximum event time (computes k = 0..K).}
 
@@ -45,8 +46,6 @@ run_demo(
 \item{screen_outcome}{Integer. Outcome index used for donor screening.}
 
 \item{screen_method}{Character. "cor" or "mse" donor screening.}
-
-\item{demean}{Logical. If TRUE, demean stacked pre design before fitting weights.}
 
 \item{lambda}{Numeric. Ridge penalty on weights (solver regularization).}
 
@@ -61,6 +60,17 @@ run_demo(
 \item{seed}{Optional integer for reproducibility.}
 
 \item{verbose}{Logical. Print progress.}
+
+\item{intercept}{Character. Intercept handling in the weight-fitting objective passed to
+\code{multiout_synth}. One of \code{"none"}, \code{"global"}, or \code{"outcome"}.}
+
+\item{standardize_outcomes}{Logical. Passed to \code{multiout_synth}.}
+
+\item{outcome_weights}{Optional numeric vector length M. Passed to \code{multiout_synth}.}
+
+\item{time_weights}{Optional numeric vector length L. Passed to \code{multiout_synth}.}
+
+\item{eps_sd}{Small jitter used in standardization to avoid division by near-zero SDs.}
 }
 \value{
 A list containing:
@@ -75,6 +85,6 @@ A list containing:
 }
 \description{
 Simulates a staggered-adoption multi-outcome panel with latent factor structure,
-fits multi-outcome augmented synthetic control (optionally with pooled intercept
-adjustment), and reports accuracy diagnostics for unit-level treatment effects.
+fits multi-outcome synthetic control with unit-level treatment effects (optionally
+with pooled intercept adjustment), and reports accuracy diagnostics.
 }

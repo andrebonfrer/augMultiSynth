@@ -24,8 +24,8 @@ simulate_multi_outcome_panel <- function(
     N = 4000, T = 200, M = 3, F = 3,
     treated_frac = 0.4,
     L = 30, K = 10,
-    te_scale = 1.0, noise_sd = 0.1,
-    alpha_sd = 0.1, delta_sd = 0.1,
+    te_scale = 0.5, noise_sd = 0.3,
+    alpha_sd = 0.5, delta_sd = 0.3,
     link_tau_to_loadings = FALSE,
     dynamic_te = FALSE,
     outcome_specific_intercepts = FALSE
