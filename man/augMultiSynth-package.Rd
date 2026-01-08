@@ -10,7 +10,7 @@ Implements multi-outcome synthetic control with scalable simplex solvers and
 unit-level treatment effect extraction for staggered adoption panels.
 }
 \author{
-\strong{Maintainer}: Andre Bonfrer \email{you@domain}
+\strong{Maintainer}: Andre Bonfrer \email{andre.bonfrer@deakin.edu.au}
 
 }
 \keyword{internal}
