@@ -1,27 +1,19 @@
----
-title: "simulation_demo"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{simulation_demo}
-  %\VignetteEncoding{UTF-8}
-  %\VignetteEngine{knitr::rmarkdown}
-editor_options: 
-  markdown: 
-    wrap: 72
----
+# sim_example.R
+#
+# Standalone simulation script for augMultiSynth
+#
+# This script demonstrates a full simulation–estimation–evaluation pipeline
+# using multi-outcome augmented synthetic control. It is intended for
+# reproducible experiments and benchmarking, not as part of the package API.
+#
+# To run:
+#   source("scripts/sim_example.R")
+#   or
+#   Rscript scripts/sim_example.R
 
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
-)
-```
-
-```{r setup}
 library(augMultiSynth)
-```
 
-\`\`\`{r} set.seed(1)
+set.seed(1)
 
 res <- run_demo(
   N = 800,
@@ -37,54 +29,39 @@ res <- run_demo(
   nu = 1
 )
 
-
-# Existing metrics (k=0)
-
+# point-at-event-time metrics (k=0)
 res$cor
 res$rmse
 
-# average over event times 1..K
+# avg over event times 1..K
 res$avg_1K$cor_avg_1K
 res$avg_1K$rmse_avg_1K
 
-# Multisynth-like pooling (Option B): estimated nu per outcome
-
-res$shrink$nu_details
-
-# Compare unit-level avg(1:K) correlation before vs after shrinkage
-
-m \<- 1 cor(res$avg_1K$tau_hat_avg_1K[, m], res$avg_1K$tau_true_avg_1K[,
-m]) cor(res$shrink$theta_shrunk[, m], res$avg_1K$tau_true_avg_1K[, m])
-
+# Estimated vs True unit-level avg treatment effects (k=1..K), by outcome
 tau_hat <- res$avg_1K$tau_hat_avg_1K
 tau_true <- res$avg_1K$tau_true_avg_1K
 
 stopifnot(all(dim(tau_hat) == dim(tau_true)))
-M \<- ncol(tau_hat)
-
-# Quick sanity check (plot)
-
-\`\`\`{r, eval=FALSE} 
+M <- ncol(tau_hat)
 
 op <- par(mfrow = c(1, M), mar = c(4,4,3,1))
 for (m in 1:M) {
   x <- tau_true[, m]
   y <- tau_hat[, m]
-  
+
   ok <- is.finite(x) & is.finite(y)
   x <- x[ok]; y <- y[ok]
-  
+
   plot(x, y,
        xlab = "True avg tau (k=1..K)",
        ylab = "Estimated avg tau (k=1..K)",
        main = paste0("Outcome ", m))
   abline(0, 1, lty = 2)
-  
-# annotate with correlation and RMSE
+
+  # annotate with correlation and RMSE
   r <- if (length(x) >= 3) cor(x, y) else NA_real_
   rmse <- sqrt(mean((y - x)^2))
   mtext(sprintf("cor=%.3f  rmse=%.3f", r, rmse), side = 3, line = 0.2, cex = 0.85)
 }
 par(op)
-
 
