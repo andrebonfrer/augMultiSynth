@@ -139,13 +139,15 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
     stop("backend='fork' is not supported on Windows. Use backend='psock'.")
   }
 
+  # find dimension of outcome vector
+  M <- length(Y_list)
+
   # coerce doubles on Y_list
   for (m in seq_len(M)) {
     Y_list[[m]] <- as.matrix(Y_list[[m]])
     storage.mode(Y_list[[m]]) <- "double"
   }
 
-  M <- length(Y_list)
   if (M < 1) stop("Y_list must contain at least one outcome matrix.")
   if (!is.matrix(Y_list[[1]])) stop("Each element of Y_list must be a matrix.")
   N <- nrow(Y_list[[1]])
