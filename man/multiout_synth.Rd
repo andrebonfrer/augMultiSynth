@@ -22,7 +22,10 @@ multiout_synth(
   outcome_weights = NULL,
   time_weights = NULL,
   intercept = c("none", "global", "outcome"),
-  eps_sd = 1e-08
+  eps_sd = 1e-08,
+  parallel = FALSE,
+  n_cores = max(1L, parallel::detectCores() - 1L),
+  backend = c("auto", "fork", "psock")
 )
 }
 \arguments{

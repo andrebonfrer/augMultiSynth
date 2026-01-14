@@ -25,7 +25,9 @@ run_demo(
   standardize_outcomes = FALSE,
   outcome_weights = NULL,
   time_weights = NULL,
-  eps_sd = 1e-08
+  eps_sd = 1e-08,
+  parallel = TRUE,
+  n_cores = max(1L, parallel::detectCores() - 1L)
 )
 }
 \arguments{

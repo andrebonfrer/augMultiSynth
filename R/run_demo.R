@@ -55,7 +55,9 @@ run_demo <- function(N = 2000, T = 200, M = 3,
                      standardize_outcomes = FALSE,
                      outcome_weights = NULL,
                      time_weights = NULL,
-                     eps_sd = 1e-8
+                     eps_sd = 1e-8,
+                     parallel = TRUE,
+                     n_cores = max(1L, parallel::detectCores() - 1L)
 ) {
   screen_method <- match.arg(screen_method)
   solver <- match.arg(solver)
@@ -91,7 +93,9 @@ run_demo <- function(N = 2000, T = 200, M = 3,
     outcome_weights = outcome_weights,
     time_weights = time_weights,
     intercept = intercept,
-    eps_sd = eps_sd
+    eps_sd = eps_sd,
+    parallel = parallel,
+    n_cores = n_cores
   )
 
   # 3) Accuracy for k = 0

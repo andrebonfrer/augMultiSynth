@@ -118,12 +118,32 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
                            outcome_weights = NULL,      # length M, default rep(1, M)
                            time_weights = NULL,         # length L, default rep(1, L)
                            intercept = c("none", "global", "outcome"),
-                           eps_sd = 1e-8) {
+                           eps_sd = 1e-8,
+                           parallel = FALSE,
+                           n_cores = max(1L, parallel::detectCores() - 1L),
+                           backend = c("auto","fork","psock")
+                           ) {
 
   screen_method <- match.arg(screen_method)
   solver <- match.arg(solver)
   intercept <- match.arg(intercept)
 
+  # choose backend
+  backend <- match.arg(backend)
+
+  in_rstudio <- identical(Sys.getenv("RSTUDIO"), "1")
+  if (backend == "auto") {
+    if (.Platform$OS.type == "windows" || in_rstudio) backend <- "psock" else backend <- "fork"
+  }
+  if (backend == "fork" && .Platform$OS.type == "windows") {
+    stop("backend='fork' is not supported on Windows. Use backend='psock'.")
+  }
+
+  # coerce doubles on Y_list
+  for (m in seq_len(M)) {
+    Y_list[[m]] <- as.matrix(Y_list[[m]])
+    storage.mode(Y_list[[m]]) <- "double"
+  }
 
   M <- length(Y_list)
   if (M < 1) stop("Y_list must contain at least one outcome matrix.")
@@ -148,6 +168,22 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
   }
   J <- length(treated_units)
   if (J < 1) stop("No treated units supplied or found.")
+
+  # --- Ensure treated_units are actually treated ---
+  treated_units <- as.integer(treated_units)
+  treated_units <- treated_units[is.finite(treat_time[treated_units])]
+
+  if (length(treated_units) < 1L) {
+    stop("No treated units remain after filtering to finite treat_time.")
+  }
+
+  # another check to ensure enough treated units
+  Ti <- treat_time[treated_units]
+  ok <- (Ti - L >= 1) & (Ti + K <= TT)
+  treated_units <- treated_units[ok]
+
+  if (J < 1L) stop("No treated units satisfy feasibility (enough pre/post periods).")
+
 
   if (!is.numeric(L) || length(L) != 1 || L < 1) stop("L must be a positive integer.")
   if (!is.numeric(K) || length(K) != 1 || K < 0) stop("K must be a nonnegative integer.")
@@ -178,14 +214,13 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
   donors_list <- vector("list", J)
   names(weights) <- names(donors_list) <- as.character(treated_units)
 
+
   # -----------------------------
-  # PASS 1: Fit weights per treated unit
+  # PASS 1: Fit weights per treated unit (parallelizable)
   # -----------------------------
-  for (jj in seq_len(J)) {
-    j <- treated_units[jj]
-    if (verbose && (jj %% 50 == 0)) {
-      message(sprintf("Fitting weights for treated unit %d of %d", jj, J))
-    }
+
+fit_one_unit <- function(j) {
+  tryCatch({
 
     donors <- donor_screen(
       Y_ref = Y_list[[screen_outcome]],
@@ -195,25 +230,30 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
       method = screen_method
     )
 
-    XY <- build_Xy_for_unit(Y_list, treat_time, j, donors, L,
-                            standardize_outcomes, eps_sd)
+    # defensive coercions
+    donors <- as.integer(donors)
+    donors <- donors[is.finite(donors) & donors >= 1L & donors <= N]
+    if (length(donors) < 2L) stop("Too few donors after screening.")
+
+    XY <- build_Xy_for_unit(
+      Y_list, treat_time, j, donors, L,
+      standardize_outcomes = standardize_outcomes,
+      eps_sd = eps_sd
+    )
     X <- XY$X
     y <- XY$y
 
-    # -------------------------------------------------------------------
-    # (A) Build row weights W for the stacked objective (y - Xw)' W (y - Xw)
-    # -------------------------------------------------------------------
-    # Rows are stacked as: outcome 1 (L rows), outcome 2 (L rows), ... outcome M (L rows)
-    if (is.null(outcome_weights)) outcome_weights <- rep(1, M)
-    if (length(outcome_weights) != M) stop("outcome_weights must have length M.")
-
-    if (is.null(time_weights)) time_weights <- rep(1, L)
-    if (length(time_weights) != L) stop("time_weights must have length L.")
+    ow <- outcome_weights
+    tw <- time_weights
+    if (is.null(ow)) ow <- rep(1, M)
+    if (length(ow) != M) stop("outcome_weights must have length M.")
+    if (is.null(tw)) tw <- rep(1, L)
+    if (length(tw) != L) stop("time_weights must have length L.")
 
     row_w <- rep(ow, each = L) * rep(tw, times = M)
-    # validations not necessary here since ow/tw were validated
-
-    # fixed effects depending on flag
+    if (any(!is.finite(row_w)) || any(row_w < 0) || sum(row_w) <= 0) {
+      stop("row weights must be finite, nonnegative, and sum to > 0.")
+    }
 
     if (intercept == "global") {
       sw <- sum(row_w)
@@ -226,29 +266,87 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
       y <- tmp$y
     }
 
-
-    # IMPORTANT: do not run your old demean_rows() after this.
-    # It is a different transformation (demeans across donors, not time).
-
-    # -------------------------------------------------------------------
-    # (D) Apply W by pre-whitening rows: X <- diag(sqrt(row_w)) X, y <- diag(sqrt(row_w)) y
-    #     This makes your existing solver optimize the weighted objective automatically.
-    # -------------------------------------------------------------------
     sqrtw <- sqrt(row_w)
     X <- X * sqrtw
     y <- y * sqrtw
 
-    # -------------------------------------------------------------------
-    # (E) Fit weights using your existing solver
-    # -------------------------------------------------------------------
     w <- switch(
       solver,
-      fw = fit_weights_fw(X, y, lambda = lambda, max_iter = 2000, tol = 1e-6, verbose = FALSE)
+      fw = fit_weights_fw(X, y, lambda = lambda, max_iter = 1000, tol = 1e-5, verbose = FALSE)
     )
 
+    # ensure numeric weights (covers case fit_weights_fw returns list)
+    if (is.list(w)) {
+      if (!is.null(w$w)) w <- w$w
+      else if (!is.null(w$weights)) w <- w$weights
+      else stop("fit_weights_fw() returned a list but no $w/$weights element.")
+    }
+    w <- as.numeric(w)
 
-    weights[[jj]] <- w
-    donors_list[[jj]] <- donors
+    if (length(w) != length(donors)) stop("Weight length mismatch with donors.")
+    if (any(!is.finite(w))) stop("Non-finite weights returned by solver.")
+
+    list(ok = TRUE, j = j, donors = donors, w = w)
+
+  }, error = function(e) {
+    list(ok = FALSE, j = j, msg = conditionMessage(e))
+  })
+}
+
+
+  # run in parallel or sequential
+  treated_units_chr <- as.character(treated_units)
+
+  if (isTRUE(parallel)) {
+
+    if (backend == "fork") {
+      out_list <- parallel::mclapply(
+        treated_units,
+        function(j) tryCatch(fit_one_unit(j), error = function(e) list(ok = FALSE, j = j, msg = conditionMessage(e))),
+        mc.cores = n_cores,
+        mc.preschedule = FALSE
+      )
+
+    } else if (backend == "psock") {
+
+      cl <- parallel::makeCluster(n_cores)
+      on.exit(parallel::stopCluster(cl), add = TRUE)
+
+      # Export everything the worker needs
+      parallel::clusterExport(
+        cl,
+        varlist = c(
+          "fit_one_unit",
+          "Y_list","treat_time","M","N","TT","L","K",
+          "max_donors","screen_outcome","screen_method",
+          "standardize_outcomes","eps_sd",
+          "outcome_weights","time_weights","intercept",
+          "lambda","solver",
+          "donor_screen","build_Xy_for_unit",
+          "demean_within_outcome_blocks","fit_weights_fw"
+        ),
+        envir = environment()
+      )
+
+      out_list <- parallel::parLapply(
+        cl,
+        treated_units,
+        function(j) tryCatch(fit_one_unit(j), error = function(e) list(ok = FALSE, j = j, msg = conditionMessage(e)))
+      )
+    }
+
+  } else {
+    out_list <- lapply(
+      treated_units,
+      function(j) tryCatch(fit_one_unit(j), error = function(e) list(ok = FALSE, j = j, msg = conditionMessage(e)))
+    )
+  }
+
+
+  # unpack results into weights/donors_list
+  for (jj in seq_len(J)) {
+    weights[[jj]] <- out_list[[jj]]$w
+    donors_list[[jj]] <- out_list[[jj]]$donors
   }
 
   # -----------------------------
