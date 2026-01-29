@@ -16,19 +16,19 @@ library(augMultiSynth)
 set.seed(1)
 
 res <- run_demo(
-  N = 1000,
-  T = 120,
-  M = 3,
-  treated_eval = 350,
-  L = 25,
-  K = 8,
-  max_donors = 400,
+  N = 5000,
+  T = 150,
+  M = 8,
+  L = 30,
+  K = 10,
+  max_donors = 4000,
+  treated_eval = 2000,
   intercept = "outcome",
   standardize_outcomes = TRUE,
   pooled_adjustment = TRUE,
   nu = 1,
   parallel = TRUE,
-  n_cores = 16
+  n_cores = 8
 )
 
 # point-at-event-time metrics (k=0)

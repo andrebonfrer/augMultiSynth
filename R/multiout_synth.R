@@ -163,28 +163,34 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
 
   if (length(treat_time) != N) stop("treat_time must have length N.")
 
+  # -----------------------------
+  # Determine treated units and apply validity/feasibility filters
+  # -----------------------------
   if (is.null(treated_units)) {
     treated_units <- which(is.finite(treat_time))
   } else {
     treated_units <- as.integer(treated_units)
   }
-  J <- length(treated_units)
-  if (J < 1) stop("No treated units supplied or found.")
 
-  # --- Ensure treated_units are actually treated ---
-  treated_units <- as.integer(treated_units)
+  # Keep only truly treated units (finite treat_time)
   treated_units <- treated_units[is.finite(treat_time[treated_units])]
 
   if (length(treated_units) < 1L) {
     stop("No treated units remain after filtering to finite treat_time.")
   }
 
-  # another check to ensure enough treated units
-  Ti <- treat_time[treated_units]
-  ok <- (Ti - L >= 1) & (Ti + K <= TT)
+  # Feasibility: must have L pre periods and K post periods available
+  Ti <- as.integer(treat_time[treated_units])
+  ok <- (Ti - L >= 1L) & (Ti + K <= TT)
+
   treated_units <- treated_units[ok]
 
-  if (J < 1L) stop("No treated units satisfy feasibility (enough pre/post periods).")
+  if (length(treated_units) < 1L) {
+    stop("No treated units satisfy feasibility (enough pre/post periods) given L and K.")
+  }
+
+  # Now define J *after* filtering
+  J <- length(treated_units)
 
 
   if (!is.numeric(L) || length(L) != 1 || L < 1) stop("L must be a positive integer.")
@@ -342,6 +348,11 @@ fit_one_unit <- function(j) {
       treated_units,
       function(j) tryCatch(fit_one_unit(j), error = function(e) list(ok = FALSE, j = j, msg = conditionMessage(e)))
     )
+  }
+
+  # robustness check
+  if (length(out_list) != J) {
+    stop("Internal error: out_list length mismatch with J. This should not happen.")
   }
 
 
