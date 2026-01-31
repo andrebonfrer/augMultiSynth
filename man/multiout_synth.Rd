@@ -8,6 +8,7 @@ multiout_synth(
   Y_list,
   treat_time,
   treated_units = NULL,
+  unit_ids = NULL,
   L,
   K,
   max_donors = 1000,

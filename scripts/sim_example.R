@@ -16,13 +16,13 @@ library(augMultiSynth)
 set.seed(1)
 
 res <- run_demo(
-  N = 5000,
+  N = 2000,
   T = 150,
   M = 8,
   L = 30,
   K = 10,
-  max_donors = 4000,
-  treated_eval = 2000,
+  max_donors = 1000,
+  treated_eval = 500,
   intercept = "outcome",
   standardize_outcomes = TRUE,
   pooled_adjustment = TRUE,
