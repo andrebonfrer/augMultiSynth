@@ -104,7 +104,9 @@
 #' dim(fit$tau)
 #'
 #' @export
-multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
+multiout_synth <- function(Y_list, treat_time,
+                           treated_units = NULL,
+                           unit_ids = NULL,
                            L, K,
                            max_donors = 1000,
                            screen_outcome = 1,
@@ -164,6 +166,16 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
   if (length(treat_time) != N) stop("treat_time must have length N.")
 
   # -----------------------------
+  # Unit identifiers (NEW)
+  # -----------------------------
+  if (is.null(unit_ids)) {
+    unit_ids <- seq_len(N)
+  } else {
+    if (length(unit_ids) != N) stop("unit_ids must have length N (nrow of outcomes).")
+    # Keep as-is (can be character, integer, etc.)
+  }
+
+  # -----------------------------
   # Determine treated units and apply validity/feasibility filters
   # -----------------------------
   if (is.null(treated_units)) {
@@ -171,6 +183,8 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
   } else {
     treated_units <- as.integer(treated_units)
   }
+
+  treated_unit_ids <- unit_ids[treated_units]
 
   # Keep only truly treated units (finite treat_time)
   treated_units <- treated_units[is.finite(treat_time[treated_units])]
@@ -220,8 +234,13 @@ multiout_synth <- function(Y_list, treat_time, treated_units = NULL,
   tau <- array(NA_real_, dim = c(J, M, K + 1))
   weights <- vector("list", J)
   donors_list <- vector("list", J)
-  names(weights) <- names(donors_list) <- as.character(treated_units)
+  donor_ids_list <- vector("list", J)
 
+  # Name lists by treated IDs (more user-friendly than row indices)
+  nm <- as.character(treated_unit_ids)
+  names(weights) <- nm
+  names(donors_list) <- nm
+  names(donor_ids_list) <- nm
 
   # -----------------------------
   # PASS 1: Fit weights per treated unit (parallelizable)
@@ -362,6 +381,12 @@ fit_one_unit <- function(j) {
     donors_list[[jj]] <- out_list[[jj]]$donors
   }
 
+  # NEW: donor IDs (derived from indices)
+  donor_ids_list <- vector("list", J)
+  for (jj in seq_len(J)) {
+    donor_ids_list[[jj]] <- unit_ids[donors_list[[jj]]]
+  }
+
   # -----------------------------
   # PASS 2: Optional pooled intercept adjustment (per outcome)
   # -----------------------------
@@ -422,8 +447,11 @@ fit_one_unit <- function(j) {
   list(
     weights = weights,
     donors = donors_list,
+    donor_ids = donor_ids_list,
     tau = tau,
     treated_units = treated_units,
+    treated_unit_ids = treated_unit_ids,
+    unit_ids = unit_ids,
     pooled_beta0 = pooled_beta0,
     pooled_adjustment = pooled_adjustment,
     nu = nu

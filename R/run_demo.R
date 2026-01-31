@@ -56,6 +56,7 @@ run_demo <- function(N = 2000, T = 200, M = 3,
                      outcome_weights = NULL,
                      time_weights = NULL,
                      eps_sd = 1e-8,
+                     test_ids = TRUE,
                      parallel = TRUE,
                      n_cores = max(1L, parallel::detectCores() - 1L)
 ) {
@@ -68,6 +69,11 @@ run_demo <- function(N = 2000, T = 200, M = 3,
   # 1) Simulate data
   # NOTE: simulate_multi_outcome_panel() (as previously defined) does NOT take `intercept`.
   sim <- simulate_multi_outcome_panel(N = N, T = T, M = M, K = K, L = L)
+
+  # -----------------------------
+  # Create unit IDs for testing / downstream joins
+  # -----------------------------
+  unit_ids <- sprintf("U%06d", seq_len(N))
 
   treated_units_all <- which(is.finite(sim$treat_time))
   if (length(treated_units_all) < 1) stop("Simulation produced no treated units.")
@@ -94,9 +100,30 @@ run_demo <- function(N = 2000, T = 200, M = 3,
     time_weights = time_weights,
     intercept = intercept,
     eps_sd = eps_sd,
+    unit_ids = unit_ids,
     parallel = parallel,
     n_cores = n_cores
   )
+
+  # -----------------------------
+  # ID mapping self-test
+  # -----------------------------
+  if (isTRUE(test_ids)) {
+    stopifnot(!is.null(fit$unit_ids))
+    stopifnot(!is.null(fit$treated_unit_ids))
+    stopifnot(!is.null(fit$donor_ids))
+
+    # Treated ID mapping
+    stopifnot(identical(fit$treated_unit_ids, fit$unit_ids[fit$treated_units]))
+
+    # Donor ID mapping for a few treated units
+    check_jj <- unique(pmin(seq_along(fit$treated_units), 5L))
+    for (jj in check_jj) {
+      stopifnot(identical(fit$donor_ids[[jj]], fit$unit_ids[fit$donors[[jj]]]))
+      stopifnot(length(fit$donor_ids[[jj]]) == length(fit$weights[[jj]]))
+    }
+  }
+
 
   # 3) Accuracy for k = 0
   J <- length(treated_units)
@@ -154,6 +181,7 @@ run_demo <- function(N = 2000, T = 200, M = 3,
   list(
     fit = fit,
     sim = sim,
+    unit_ids = unit_ids,
     cor = cor_out,
     rmse = rmse_out,
     avg_1K = avg_1K,
