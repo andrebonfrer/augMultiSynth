@@ -198,6 +198,7 @@ multiout_synth <- function(Y_list, treat_time,
   ok <- (Ti - L >= 1L) & (Ti + K <= TT)
 
   treated_units <- treated_units[ok]
+  treated_unit_ids <- treated_unit_ids[ok]
 
   if (length(treated_units) < 1L) {
     stop("No treated units satisfy feasibility (enough pre/post periods) given L and K.")

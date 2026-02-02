@@ -16,20 +16,25 @@ library(augMultiSynth)
 set.seed(1)
 
 res <- run_demo(
-  N = 2000,
+  N = 1000,
   T = 150,
   M = 8,
   L = 30,
   K = 10,
-  max_donors = 1000,
-  treated_eval = 500,
+  max_donors = 500,
+  treated_eval = 300,
   intercept = "outcome",
   standardize_outcomes = TRUE,
   pooled_adjustment = TRUE,
   nu = 1,
   parallel = TRUE,
-  n_cores = 8
+  n_cores = 8,
+  test_ids = TRUE
 )
+
+# If it returns without error, the ID mappings are correct.
+head(res$fit$treated_unit_ids)
+head(res$fit$donor_ids[[1]])
 
 # point-at-event-time metrics (k=0)
 res$cor
