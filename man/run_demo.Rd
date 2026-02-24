@@ -27,7 +27,11 @@ run_demo(
   time_weights = NULL,
   eps_sd = 1e-08,
   test_ids = TRUE,
-  parallel = TRUE,
+  tune_lambda = FALSE,
+  lambda_grid = 10^seq(-8, -3, by = 1),
+  holdout = 5,
+  tune_units = 120,
+  parallel_backend = c("none", "fork", "psock"),
   n_cores = max(1L, parallel::detectCores() - 1L)
 )
 }
@@ -38,7 +42,7 @@ run_demo(
 
 \item{M}{Integer. Number of outcomes.}
 
-\item{treated_eval}{Integer. Number of treated units to evaluate (subset of treated).}
+\item{treated_eval}{Integer. Number of treated units to estimate (subset of treated).}
 
 \item{L}{Integer. Number of pre-treatment periods used for weights and intercept handling.}
 
@@ -74,16 +78,35 @@ run_demo(
 \item{time_weights}{Optional numeric vector length L. Passed to \code{multiout_synth}.}
 
 \item{eps_sd}{Small jitter used in standardization to avoid division by near-zero SDs.}
+
+\item{test_ids}{Logical. If TRUE, runs internal mapping checks for treated and donor IDs.}
+
+\item{tune_lambda}{Logical. If TRUE, runs \code{tune_lambda()} on a subset and uses the
+selected lambda. If FALSE, uses the supplied \code{lambda}.}
+
+\item{lambda_grid}{Numeric vector of candidate lambdas (only if tune_lambda=TRUE).}
+
+\item{holdout}{Integer. Holdout length for CV (only if tune_lambda=TRUE).}
+
+\item{tune_units}{Integer. Number of treated units used for CV (only if tune_lambda=TRUE).}
+
+\item{parallel_backend}{One of "none", "psock", or "fork". Passed to \code{multiout_synth}
+and (if used) \code{tune_lambda}.}
+
+\item{n_cores}{Integer. Number of workers/cores for the chosen backend.}
 }
 \value{
 A list containing:
 \itemize{
 \item \code{fit}: result of \code{multiout_synth()}
 \item \code{sim}: simulated data object
+\item \code{unit_ids}: unit identifiers used
+\item \code{lambda_used}: lambda used in estimation (tuned or supplied)
 \item \code{cor}: length-M correlations for k=0 unit effects (treated subset)
 \item \code{rmse}: length-M RMSE for k=0 unit effects (treated subset)
 \item \code{avg_1K}: list from \code{eval_avg_1K()} (unit-level avg(1:K) accuracy)
 \item \code{shrink}: list from \code{multisynth_shrink()} (if enabled), plus accuracy vs truth
+\item \code{tune}: NULL or tune_lambda results (if tune_lambda=TRUE)
 }
 }
 \description{
