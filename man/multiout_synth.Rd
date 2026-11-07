@@ -25,7 +25,8 @@ multiout_synth(
   intercept = c("none", "global", "outcome"),
   eps_sd = 1e-08,
   parallel_backend = c("none", "fork", "psock"),
-  n_cores = max(1L, parallel::detectCores() - 1L)
+  n_cores = max(1L, parallel::detectCores() - 1L),
+  donors_list = NULL
 )
 }
 \arguments{
@@ -35,6 +36,14 @@ multiout_synth(
 
 \item{treated_units}{Optional integer vector of treated unit indices to estimate.
 Defaults to all finite treat_time.}
+
+\item{donors_list}{Optional list of candidate donor sets, one per treated unit: each element an
+integer vector of unit indices (integers in 1..N) or a character vector of unit ids (matched against
+\code{unit_ids}; pass ids as character to avoid ambiguity with indices). Named by
+treated unit id (as character) or, if unnamed, aligned with the treated units in the order of
+\code{treated_units}. For a unit with an entry, screening runs inside that set (the eligibility
+rule \code{treat_time > treat_time[j] + K} still applies); units without an entry use the full
+eligible pool as before. \code{NULL} (default) reproduces the previous behaviour exactly.}
 
 \item{unit_ids}{Optional vector length N of unit identifiers (character/integer/etc.).
 If NULL, uses 1:N.}

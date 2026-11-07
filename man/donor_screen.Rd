@@ -11,7 +11,8 @@ donor_screen(
   K,
   L,
   max_donors = 1000,
-  method = c("cor", "mse")
+  method = c("cor", "mse"),
+  candidates = NULL
 )
 }
 \arguments{
@@ -30,6 +31,9 @@ through \code{treat_time[j] + K}).}
 \item{max_donors}{Integer. Maximum number of donors to return.}
 
 \item{method}{Screening method: \code{"cor"} (correlation) or \code{"mse"} (mean squared error).}
+
+\item{candidates}{Optional integer vector of unit indices. When given, only these units are
+considered (after the eligibility rule); \code{NULL} (default) considers every unit.}
 }
 \value{
 Integer vector of donor indices (subset of eligible donors), length \code{<= max_donors}.

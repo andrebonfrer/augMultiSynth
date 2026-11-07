@@ -33,6 +33,15 @@
 #' @param n_cores Integer. Number of workers/cores.
 #' @param unit_ids Optional vector length \code{N} of unit IDs for mapping.
 #' @param tune_units Integer. If provided, sample this many treated units for tuning.
+#' @param donors_list Optional per-unit candidate donor sets, as in [multiout_synth()]; \code{NULL}
+#'   (default) screens from the full eligible pool.
+#'
+#' @details
+#' With \code{intercept = "outcome"} the per-outcome intercept is estimated on the TRAINING
+#' pre-periods and the same shift is applied to the held-out periods, so a level divergence in
+#' the held-out block counts as validation error (as with \code{intercept = "global"}). Versions
+#' before 0.3.6 re-centred the held-out block on its own mean, which hid such divergence and
+#' scored shape only.
 #'
 #' @return A list with:
 #' \describe{
@@ -70,7 +79,8 @@ tune_lambda <- function(
     parallel_backend = c("none", "fork", "psock"),
     n_cores = 2L,
     unit_ids = NULL,
-    tune_units = 200
+    tune_units = 200,
+    donors_list = NULL
 ) {
   method <- match.arg(method)
   screen_method <- match.arg(screen_method)
@@ -131,6 +141,7 @@ tune_lambda <- function(
     units_used <- treated_units
   }
   units_used <- unique(units_used)
+  cand_by_unit <- resolve_donors_list(donors_list, units_used, if (is.null(unit_ids)) seq_len(N) else unit_ids, N)
 
   # ---- Objective weights ----
   ow <- outcome_weights
@@ -175,7 +186,8 @@ tune_lambda <- function(
         treat_time = treat_time,
         j = j, K = K, L = L,
         max_donors = max_donors,
-        method = screen_method
+        method = screen_method,
+        candidates = cand_by_unit[[as.character(j)]]
       )
       donors <- as.integer(donors)
       donors <- donors[is.finite(donors) & donors >= 1L & donors <= N]
@@ -199,7 +211,13 @@ tune_lambda <- function(
       y_tr <- y_full[tr_rows]
       w_tr <- row_w_full[tr_rows]
 
-      # apply intercept projection on training
+      # validation slices (taken now so the training intercepts can be applied to them)
+      X_va <- X_full[va_rows, , drop = FALSE]
+      y_va <- y_full[va_rows]
+      w_va <- row_w_full[va_rows]
+      Lt <- length(idx_tr); Lv <- length(idx_val)
+
+      # apply intercept projection: estimated on TRAINING rows, applied to training AND validation rows
       if (intercept == "global") {
         sw <- sum(w_tr)
         ybar <- sum(w_tr * y_tr) / sw
@@ -207,34 +225,26 @@ tune_lambda <- function(
 
         y_tr <- y_tr - ybar
         X_tr <- X_tr - matrix(Xbar, nrow = nrow(X_tr), ncol = ncol(X_tr), byrow = TRUE)
+        y_va <- y_va - ybar
+        X_va <- X_va - matrix(Xbar, nrow = nrow(X_va), ncol = ncol(X_va), byrow = TRUE)
       } else if (intercept == "outcome") {
-        # training has M blocks of length length(idx_tr)
-        tmp <- demean_within_outcome_blocks(X_tr, y_tr, L = length(idx_tr), time_weights = tw[idx_tr])
-        X_tr <- tmp$X
-        y_tr <- tmp$y
+        # per-outcome intercept from the training block of that outcome (weighted by the training time weights)
+        tw_tr <- tw[idx_tr]; sw <- sum(tw_tr)
+        for (m in seq_len(M)) {
+          it <- (m - 1L) * Lt + seq_len(Lt); iv <- (m - 1L) * Lv + seq_len(Lv)
+          ybar_m <- sum(tw_tr * y_tr[it]) / sw
+          Xbar_m <- as.numeric(crossprod(tw_tr, X_tr[it, , drop = FALSE]) / sw)
+          y_tr[it] <- y_tr[it] - ybar_m
+          X_tr[it, ] <- X_tr[it, , drop = FALSE] - matrix(Xbar_m, nrow = Lt, ncol = ncol(X_tr), byrow = TRUE)
+          y_va[iv] <- y_va[iv] - ybar_m
+          X_va[iv, ] <- X_va[iv, , drop = FALSE] - matrix(Xbar_m, nrow = Lv, ncol = ncol(X_va), byrow = TRUE)
+        }
       }
 
       # pre-whiten training
       sqrtw_tr <- sqrt(w_tr)
       Xw_tr <- X_tr * sqrtw_tr
       yw_tr <- y_tr * sqrtw_tr
-
-      # validation slices
-      X_va <- X_full[va_rows, , drop = FALSE]
-      y_va <- y_full[va_rows]
-      w_va <- row_w_full[va_rows]
-
-      # apply *compatible* intercept transform to validation
-      if (intercept == "global") {
-        # use TRAINING ybar/Xbar
-        y_va <- y_va - ybar
-        X_va <- X_va - matrix(Xbar, nrow = nrow(X_va), ncol = ncol(X_va), byrow = TRUE)
-      } else if (intercept == "outcome") {
-        # validation has M blocks of length length(idx_val)
-        tmpv <- demean_within_outcome_blocks(X_va, y_va, L = length(idx_val), time_weights = tw[idx_val])
-        X_va <- tmpv$X
-        y_va <- tmpv$y
-      }
 
       # pre-whiten validation
       sqrtw_va <- sqrt(w_va)
@@ -283,7 +293,7 @@ tune_lambda <- function(
       "max_donors","screen_outcome","screen_method",
       "standardize_outcomes","eps_sd",
       "outcome_weights","time_weights","intercept",
-      "lambda_grid","solver",
+      "lambda_grid","solver","cand_by_unit","resolve_donors_list",
       "donor_screen","build_Xy_for_unit",
       "demean_within_outcome_blocks","fit_weights_fw"
     ),
