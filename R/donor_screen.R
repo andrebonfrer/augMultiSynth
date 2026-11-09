@@ -12,11 +12,16 @@
 #' @param L Integer. Number of pre-treatment periods used for screening.
 #' @param max_donors Integer. Maximum number of donors to return.
 #' @param method Screening method: \code{"cor"} (correlation) or \code{"mse"} (mean squared error).
+#' @param candidates Optional integer vector of unit indices. When given, only these units are
+#'   considered (after the eligibility rule below); \code{NULL} (default) considers every unit.
+#'   Used to impose a design-specific donor pool, e.g. donors adopting in a band of weeks around
+#'   the treated unit's relative adoption week.
 #'
 #' @details
 #' Eligibility rule implemented:
 #' \itemize{
 #'   \item Donors are units with \code{treat_time > treat_time[j] + K} (including never-treated).
+#'   \item With \code{candidates}, the eligible set is intersected with it before screening.
 #' }
 #'
 #' @return Integer vector of donor indices (subset of eligible donors), length \code{<= max_donors}.
@@ -30,7 +35,7 @@
 #'
 #' @export
 donor_screen <- function(Y_ref, treat_time, j, K, L, max_donors = 1000,
-                         method = c("cor", "mse")) {
+                         method = c("cor", "mse"), candidates = NULL) {
 
   method <- match.arg(method)
 
@@ -42,6 +47,12 @@ donor_screen <- function(Y_ref, treat_time, j, K, L, max_donors = 1000,
   if (min(pre_times) < 1) stop("Not enough pre periods for screening.")
 
   eligible <- which(treat_time > (Tj + K))
+  if (!is.null(candidates)) {
+    candidates <- as.integer(candidates)
+    candidates <- candidates[is.finite(candidates) & candidates >= 1L & candidates <= N]
+    eligible <- intersect(eligible, candidates)
+  }
+  eligible <- setdiff(eligible, j)
   if (length(eligible) == 0) stop("No eligible donors under the eligibility rule.")
 
   yj <- Y_ref[j, pre_times]

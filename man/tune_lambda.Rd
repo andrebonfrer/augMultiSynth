@@ -29,7 +29,8 @@ tune_lambda(
   parallel_backend = c("none", "fork", "psock"),
   n_cores = 2L,
   unit_ids = NULL,
-  tune_units = 200
+  tune_units = 200,
+  donors_list = NULL
 )
 }
 \arguments{
@@ -83,6 +84,15 @@ tune_lambda(
 \item{unit_ids}{Optional vector length \code{N} of unit IDs for mapping.}
 
 \item{tune_units}{Integer. If provided, sample this many treated units for tuning.}
+
+\item{donors_list}{Optional per-unit candidate donor sets, as in \code{\link{multiout_synth}()}; \code{NULL}
+(default) screens from the full eligible pool.}
+}
+\details{
+With \code{intercept = "outcome"} the per-outcome intercept is estimated on the TRAINING
+pre-periods and the same shift is applied to the held-out periods, so a level divergence in the
+held-out block counts as validation error (as with \code{intercept = "global"}). Versions before
+0.3.6 re-centred the held-out block on its own mean, which hid such divergence and scored shape only.
 }
 \value{
 A list with:

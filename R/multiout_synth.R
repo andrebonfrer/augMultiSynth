@@ -10,6 +10,13 @@
 #' @param treat_time Numeric vector length N; first treated period per unit (Inf = never-treated).
 #' @param treated_units Optional integer vector of treated unit indices to estimate.
 #'   Defaults to all finite treat_time.
+#' @param donors_list Optional list of candidate donor sets, one per treated unit: each element an
+#'   integer vector of unit indices (integers in 1..N) or a character vector of unit ids (matched against
+#'   \code{unit_ids}; pass ids as character to avoid ambiguity with indices). Named by
+#'   treated unit id (as character) or, if unnamed, aligned with the treated units in the order of
+#'   \code{treated_units}. For a unit with an entry, screening runs inside that set (the eligibility
+#'   rule \code{treat_time > treat_time[j] + K} still applies); units without an entry use the full
+#'   eligible pool as before. \code{NULL} (default) reproduces the previous behaviour exactly.
 #' @param unit_ids Optional vector length N of unit identifiers (character/integer/etc.).
 #'   If NULL, uses 1:N.
 #' @param L Integer; number of pre-treatment periods used for weight fitting.
@@ -53,7 +60,8 @@ multiout_synth <- function(
     intercept = c("none", "global", "outcome"),
     eps_sd = 1e-8,
     parallel_backend = c("none", "fork", "psock"),
-    n_cores = max(1L, parallel::detectCores() - 1L)
+    n_cores = max(1L, parallel::detectCores() - 1L),
+    donors_list = NULL
 ) {
   # -----------------------------
   # Parse args / basic checks
@@ -128,6 +136,11 @@ multiout_synth <- function(
   J <- length(treated_units)
 
   # -----------------------------
+  # Optional per-unit candidate donor sets (resolved to unit indices, keyed by treated unit index)
+  # -----------------------------
+  cand_by_unit <- resolve_donors_list(donors_list, treated_units, unit_ids, N)
+
+  # -----------------------------
   # Outcome/time weights for stacked objective
   # -----------------------------
   ow <- outcome_weights
@@ -167,7 +180,8 @@ multiout_synth <- function(
         treat_time = treat_time,
         j = j, K = K, L = L,
         max_donors = max_donors,
-        method = screen_method
+        method = screen_method,
+        candidates = cand_by_unit[[as.character(j)]]
       )
       donors <- as.integer(donors)
       donors <- donors[is.finite(donors) & donors >= 1L & donors <= N]
@@ -250,7 +264,7 @@ multiout_synth <- function(
       "max_donors", "screen_outcome", "screen_method",
       "standardize_outcomes", "eps_sd",
       "ow", "tw", "row_w_base", "intercept",
-      "lambda", "solver",
+      "lambda", "solver", "cand_by_unit",
       "donor_screen", "build_Xy_for_unit",
       "demean_within_outcome_blocks", "fit_weights_fw"
     ),
@@ -349,4 +363,40 @@ multiout_synth <- function(
     pooled_adjustment = pooled_adjustment,
     nu = nu
   )
+}
+
+#' Resolve a user-supplied list of candidate donor sets to unit indices
+#'
+#' @param donors_list As in [multiout_synth()] (may be NULL).
+#' @param treated_units Integer indices of the treated units being estimated.
+#' @param unit_ids Vector of unit identifiers, length N.
+#' @param N Number of units.
+#' @return A list keyed by treated unit index (as character) with integer donor indices, or an
+#'   empty list when \code{donors_list} is NULL. Entries that resolve to no valid unit are dropped
+#'   (the unit then uses the full eligible pool).
+#' @keywords internal
+resolve_donors_list <- function(donors_list, treated_units, unit_ids, N) {
+  if (is.null(donors_list)) return(list())
+  if (!is.list(donors_list)) stop("donors_list must be a list (one element per treated unit) or NULL.")
+  ids_chr <- as.character(unit_ids)
+  keys <- names(donors_list)
+  if (is.null(keys) || any(!nzchar(keys))) {
+    if (length(donors_list) != length(treated_units))
+      stop("An unnamed donors_list must have one element per treated unit (length(treated_units)).")
+    keys <- as.character(unit_ids[treated_units])
+  }
+  out <- list()
+  for (i in seq_along(donors_list)) {
+    j <- match(keys[i], ids_chr)
+    if (is.na(j)) next                                        # key is not a unit id: ignore silently
+    d <- donors_list[[i]]
+    if (is.null(d) || !length(d)) next
+    # character entries are unit ids; integer-valued numbers inside 1..N are unit indices; other numbers are ids
+    idx <- if (is.character(d) || is.factor(d)) match(as.character(d), ids_chr)
+           else if (is.numeric(d) && all(d == round(d), na.rm = TRUE) && all(d >= 1 & d <= N, na.rm = TRUE)) as.integer(d)
+           else match(as.character(d), ids_chr)
+    idx <- unique(idx[is.finite(idx) & idx >= 1L & idx <= N])
+    if (length(idx)) out[[as.character(j)]] <- idx
+  }
+  out
 }
