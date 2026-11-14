@@ -38,7 +38,8 @@
 #' @param n_cores Integer; number of cores/workers when parallel_backend != "none".
 #'
 #' @return A list with weights, donors, donor_ids, tau, treated_units, treated_unit_ids,
-#'   unit_ids, pooled_beta0, pooled_adjustment, nu.
+#'   unit_ids, pooled_beta0, pooled_adjustment, nu, L, K. `L` and `K` let [tau_inference()]
+#'   and the panel helpers default to the window used in fitting.
 #'
 #' @export
 multiout_synth <- function(
@@ -361,7 +362,9 @@ multiout_synth <- function(
     unit_ids = unit_ids,
     pooled_beta0 = pooled_beta0,
     pooled_adjustment = pooled_adjustment,
-    nu = nu
+    nu = nu,
+    L = L,
+    K = K
   )
 }
 

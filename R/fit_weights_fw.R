@@ -72,7 +72,7 @@ fit_weights_fw <- function(X, y, lambda = 1e-3,
     d <- s - w
 
     num <- sum(g * d)
-    den <- 2 * as.numeric(crossprod(d, Q %*% d))
+    den <- 2 * sum(d * as.numeric(Q %*% d))  # base crossprod() only dispatches on Matrix classes from R 4.4
     gamma <- if (den > 0) min(1, max(0, -num / den)) else 1
 
     w_new <- w + gamma * d

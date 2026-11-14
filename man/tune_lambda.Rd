@@ -85,14 +85,8 @@ tune_lambda(
 
 \item{tune_units}{Integer. If provided, sample this many treated units for tuning.}
 
-\item{donors_list}{Optional per-unit candidate donor sets, as in \code{\link{multiout_synth}()}; \code{NULL}
+\item{donors_list}{Optional per-unit candidate donor sets, as in \code{\link[=multiout_synth]{multiout_synth()}}; \code{NULL}
 (default) screens from the full eligible pool.}
-}
-\details{
-With \code{intercept = "outcome"} the per-outcome intercept is estimated on the TRAINING
-pre-periods and the same shift is applied to the held-out periods, so a level divergence in the
-held-out block counts as validation error (as with \code{intercept = "global"}). Versions before
-0.3.6 re-centred the held-out block on its own mean, which hid such divergence and scored shape only.
 }
 \value{
 A list with:
@@ -112,4 +106,11 @@ simplex weight problem:
 \deqn{\min_{w\in\Delta}\ \|y - Xw\|_W^2 + \lambda \|w\|_2^2}
 where \code{y, X} are stacked multi-outcome pre-treatment data (after any
 intercept projection and row-weight pre-whitening).
+}
+\details{
+With \code{intercept = "outcome"} the per-outcome intercept is estimated on the TRAINING
+pre-periods and the same shift is applied to the held-out periods, so a level divergence in
+the held-out block counts as validation error (as with \code{intercept = "global"}). Versions
+before 0.3.6 re-centred the held-out block on its own mean, which hid such divergence and
+scored shape only.
 }

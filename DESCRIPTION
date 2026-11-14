@@ -1,7 +1,7 @@
 Package: augMultiSynth
 Type: Package
 Title: Multi-Outcome Partially-Pooled Synthetic Control at Scale
-Version: 0.3.6
+Version: 0.3.7
 Authors@R: person("Andre", "Bonfrer", role = c("aut","cre"), email = "andre.bonfrer@deakin.edu.au")
 Description: Multi-outcome synthetic control with scalable simplex solvers and unit-level treatment effects for staggered adoption panels.
 License: MIT + file LICENSE
@@ -9,9 +9,13 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports:
-    Matrix
+    Matrix,
+    stats
 Suggests:
     testthat,
+    data.table,
+    scmBayesPost (>= 0.4.8),
     knitr,
     rmarkdown
 VignetteBuilder: knitr
+Config/testthat/edition: 3

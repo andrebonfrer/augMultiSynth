@@ -33,6 +33,8 @@
 #' @param lambda_grid Numeric vector of candidate lambdas (only if tune_lambda=TRUE).
 #' @param holdout Integer. Holdout length for CV (only if tune_lambda=TRUE).
 #' @param tune_units Integer. Number of treated units used for CV (only if tune_lambda=TRUE).
+#' @param tune_nu Logical. If TRUE, runs \code{tune_nu()} at the chosen lambda and fits with
+#'   the selected \code{nu} (returned as \code{nu_used}).
 #'
 #' @param parallel_backend One of "none", "psock", or "fork". Passed to \code{multiout_synth}
 #'   and (if used) \code{tune_lambda}.
@@ -126,6 +128,8 @@ run_demo <- function(
     }
   }
 
+  nu_used <- nu
+  tm <- NULL
   if(isTRUE(tune_nu)) {
     message("Running nu tuning step.\n")
     tm <- tune_nu(
@@ -144,7 +148,7 @@ run_demo <- function(
       verbose = verbose
     )
 
-  nu_opt <- tm$nu_opt
+    nu_used <- tm$nu_opt
   }
 
   # 3) Fit multiout_synth
@@ -160,7 +164,7 @@ run_demo <- function(
     lambda = lambda_used,
     solver = solver,
     pooled_adjustment = pooled_adjustment,
-    nu = nu,
+    nu = nu_used,
     verbose = verbose,
     standardize_outcomes = standardize_outcomes,
     outcome_weights = outcome_weights,
@@ -240,10 +244,12 @@ run_demo <- function(
     sim = sim,
     unit_ids = unit_ids,
     lambda_used = lambda_used,
+    nu_used = nu_used,
     cor = cor_out,
     rmse = rmse_out,
     avg_1K = avg_1K,
     shrink = shrink,
-    tune = tune
+    tune = tune,
+    tune_nu = tm
   )
 }

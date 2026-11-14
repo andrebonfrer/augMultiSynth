@@ -31,6 +31,8 @@
 #' @param n_cores Integer. Number of cores for parallel backends.
 #' @param unit_ids Optional vector length \code{N} of unit IDs for mapping.
 #' @param tune_units Integer. If provided, sample this many treated units for tuning.
+#' @param return_beta0 Logical. If TRUE, also return the pooled intercepts for each value of
+#'   \code{nu_grid} (\code{beta0_by_nu}).
 #'
 #' @return A list with:
 #' \describe{

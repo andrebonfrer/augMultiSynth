@@ -28,7 +28,8 @@ run_demo(
   eps_sd = 1e-08,
   test_ids = TRUE,
   tune_lambda = FALSE,
-  lambda_grid = 10^seq(-8, -3, by = 1),
+  tune_nu = FALSE,
+  lambda_grid = 10^seq(-8, -1, by = 1),
   holdout = 5,
   tune_units = 120,
   parallel_backend = c("none", "fork", "psock"),
@@ -83,6 +84,9 @@ run_demo(
 
 \item{tune_lambda}{Logical. If TRUE, runs \code{tune_lambda()} on a subset and uses the
 selected lambda. If FALSE, uses the supplied \code{lambda}.}
+
+\item{tune_nu}{Logical. If TRUE, runs \code{tune_nu()} at the chosen lambda and fits with
+the selected \code{nu} (returned as \code{nu_used}).}
 
 \item{lambda_grid}{Numeric vector of candidate lambdas (only if tune_lambda=TRUE).}
 

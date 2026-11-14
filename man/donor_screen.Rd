@@ -33,7 +33,9 @@ through \code{treat_time[j] + K}).}
 \item{method}{Screening method: \code{"cor"} (correlation) or \code{"mse"} (mean squared error).}
 
 \item{candidates}{Optional integer vector of unit indices. When given, only these units are
-considered (after the eligibility rule); \code{NULL} (default) considers every unit.}
+considered (after the eligibility rule below); \code{NULL} (default) considers every unit.
+Used to impose a design-specific donor pool, e.g. donors adopting in a band of weeks around
+the treated unit's relative adoption week.}
 }
 \value{
 Integer vector of donor indices (subset of eligible donors), length \code{<= max_donors}.
@@ -46,6 +48,7 @@ pre-treatment periods. This is a performance-critical step for large panels.
 Eligibility rule implemented:
 \itemize{
 \item Donors are units with \code{treat_time > treat_time[j] + K} (including never-treated).
+\item With \code{candidates}, the eligible set is intersected with it before screening.
 }
 }
 \examples{
