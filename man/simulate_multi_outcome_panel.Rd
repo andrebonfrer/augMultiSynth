@@ -18,7 +18,8 @@ simulate_multi_outcome_panel(
   delta_sd = 0.3,
   link_tau_to_loadings = FALSE,
   dynamic_te = FALSE,
-  outcome_specific_intercepts = FALSE
+  outcome_specific_intercepts = FALSE,
+  treated_loading_shift = 0
 )
 }
 \arguments{
@@ -51,6 +52,11 @@ simulate_multi_outcome_panel(
 \item{outcome_specific_intercepts}{Logical. If TRUE, simulate outcome-specific unit and time intercepts
 \eqn{\alpha_i^{(m)}} and \eqn{\delta_t^{(m)}}. If FALSE (default), use common \eqn{\alpha_i} and \eqn{\delta_t}
 shared across outcomes.}
+
+\item{treated_loading_shift}{Numeric, length 1 or F. Added to the factor loadings of
+treated units after treatment is assigned (a scalar shifts the first factor only),
+so treated units can sit outside the convex hull of the donors' loadings.
+0 (default) leaves the simulation and the random-number stream unchanged.}
 }
 \value{
 List with Y0, Yobs, treat_time, treated, tau_unit, tau_true_event, and DGP components.

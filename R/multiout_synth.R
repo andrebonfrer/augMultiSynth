@@ -29,6 +29,20 @@
 #' @param pooled_adjustment Logical; if TRUE fit pooled intercept adjustment per outcome.
 #' @param nu Nonnegative ridge penalty for pooled adjustment (per outcome).
 #' @param verbose Logical.
+#' @param augment `"none"` (default) or `"ridge"`: ridge-augmented synthetic control
+#'   (Ben-Michael, Feller and Rothstein, Lemma 1). The donors' pre-treatment features
+#'   used to fit the weights (all outcomes stacked over the L pre periods, standardised and
+#'   de-meaned as for the weights) are centred across donors, and the weights are
+#'   corrected by `A_c' (A_c A_c' + lambda I)^{-1} (y - A w)`. The corrected weights sum
+#'   to one, can be negative (extrapolation outside the donors' convex hull), and are the
+#'   same for all outcomes. They replace `weights` (the simplex weights are kept in
+#'   `augment$weights_scm`), so `tau`, [tau_inference()] and [scm_gap_panel()] use them.
+#' @param augment_lambda Ridge penalty relative to the mean eigenvalue of `A_c A_c'`
+#'   (`Inf` = no augmentation). `NULL` (default) chooses it with [tune_augment()].
+#'   A vector returns the weights for every value in `augment$path` (used for tuning)
+#'   and leaves `weights` unaugmented.
+#' @param augment_tune List of further arguments for [tune_augment()] (e.g. `grid`,
+#'   `h`, `tune_units`, `one_se`).
 #' @param fw_max_iter,fw_tol Solver controls passed to [fit_weights_fw()]: maximum
 #'   iterations and tolerance on the relative Frank–Wolfe duality gap. Per-unit
 #'   convergence is reported in `fw_diagnostics`.
@@ -41,7 +55,9 @@
 #' @param n_cores Integer; number of cores/workers when parallel_backend != "none".
 #'
 #' @return A list with weights, donors, donor_ids, tau, treated_units, treated_unit_ids,
-#'   unit_ids, pooled_beta0, pooled_adjustment, nu, L, K, fw_diagnostics. `L` and `K` let [tau_inference()]
+#'   unit_ids, pooled_beta0, pooled_adjustment, nu, L, K, fw_diagnostics, augment
+#'   (`NULL` unless `augment = "ridge"`: method, lambda, tuning, weights_scm, and per-unit
+#'   diagnostics `pre_rmse_scm`, `pre_rmse_aug`, `neg_mass`, `corr_l1`). `L` and `K` let [tau_inference()]
 #'   and the panel helpers default to the window used in fitting.
 #'
 #' @export
@@ -67,7 +83,10 @@ multiout_synth <- function(
     n_cores = max(1L, parallel::detectCores() - 1L),
     donors_list = NULL,
     fw_max_iter = 50000L,
-    fw_tol = 1e-8
+    fw_tol = 1e-8,
+    augment = c("none", "ridge"),
+    augment_lambda = NULL,
+    augment_tune = list()
 ) {
   # -----------------------------
   # Parse args / basic checks
@@ -76,6 +95,7 @@ multiout_synth <- function(
   solver <- match.arg(solver)
   intercept <- match.arg(intercept)
   parallel_backend <- match.arg(parallel_backend)
+  augment <- match.arg(augment)
 
   if (!is.list(Y_list) || length(Y_list) < 1L) stop("Y_list must be a non-empty list of matrices.")
   if (!is.numeric(treat_time)) stop("treat_time must be numeric.")
@@ -145,6 +165,26 @@ multiout_synth <- function(
   # Optional per-unit candidate donor sets (resolved to unit indices, keyed by treated unit index)
   # -----------------------------
   cand_by_unit <- resolve_donors_list(donors_list, treated_units, unit_ids, N)
+
+  # Ridge augmentation: choose the penalty by in-time placebo forecasts if not given
+  augment_tuning <- NULL
+  if (augment == "ridge") {
+    if (is.null(augment_lambda)) {
+      if (verbose) message("Tuning the ridge augmentation penalty (tune_augment).")
+      augment_tuning <- do.call(tune_augment, c(list(
+        Y_list = Y_list, treat_time = treat_time, L = L, K = K, treated_units = treated_units,
+        max_donors = max_donors, screen_outcome = screen_outcome, screen_method = screen_method,
+        lambda = lambda, standardize_outcomes = standardize_outcomes,
+        outcome_weights = outcome_weights, time_weights = time_weights, intercept = intercept,
+        eps_sd = eps_sd, parallel_backend = parallel_backend, n_cores = n_cores,
+        fw_max_iter = fw_max_iter, fw_tol = fw_tol), augment_tune))
+      augment_lambda <- augment_tuning$lambda
+    }
+    if (!is.numeric(augment_lambda) || !length(augment_lambda) || anyNA(augment_lambda) ||
+        any(augment_lambda < 0)) {
+      stop("augment_lambda must be nonnegative numeric (Inf = no augmentation).")
+    }
+  }
 
   # -----------------------------
   # Outcome/time weights for stacked objective
@@ -236,6 +276,18 @@ multiout_synth <- function(
       a_or_na <- function(nm) { v <- attr(w, nm); if (is.null(v)) NA_real_ else as.numeric(v) }
       fw_diag <- c(rel_gap = a_or_na("fw_rel_gap"), iter = a_or_na("fw_iter"),
                    converged = as.numeric(isTRUE(attr(w, "fw_converged"))))
+      w <- as.numeric(w)
+
+      aug <- NULL
+      if (augment == "ridge") {
+        G <- .ridge_augment(Xw, yw, w, augment_lambda)
+        if (length(augment_lambda) == 1L) {
+          aug <- list(diag = .augment_diag(Xw, yw, w, G[, 1]), w_scm = w)
+          w <- as.numeric(G[, 1])
+        } else {
+          aug <- list(path = G, w_scm = w)
+        }
+      }
 
       # normalize possible solver return types
       if (is.list(w)) {
@@ -248,7 +300,7 @@ multiout_synth <- function(
       if (length(w) != length(donors)) stop("Weight length mismatch with donors.")
       if (any(!is.finite(w))) stop("Non-finite weights returned by solver.")
 
-      list(ok = TRUE, j = j, donors = donors, w = w, fw_diag = fw_diag)
+      list(ok = TRUE, j = j, donors = donors, w = w, fw_diag = fw_diag, aug = aug)
     }, error = function(e) {
       list(ok = FALSE, j = j, msg = conditionMessage(e))
     })
@@ -275,6 +327,7 @@ multiout_synth <- function(
       "standardize_outcomes", "eps_sd",
       "ow", "tw", "row_w_base", "intercept",
       "lambda", "solver", "cand_by_unit", "fw_max_iter", "fw_tol",
+      "augment", "augment_lambda", ".ridge_augment", ".augment_diag",
       "donor_screen", "build_Xy_for_unit",
       "demean_within_outcome_blocks", "fit_weights_fw"
     ),
@@ -319,6 +372,18 @@ multiout_synth <- function(
     weights[[jj]] <- out_list[[jj]]$w
     donors_list[[jj]] <- out_list[[jj]]$donors
     donor_ids_list[[jj]] <- unit_ids[out_list[[jj]]$donors]
+  }
+
+  augment_out <- NULL
+  if (augment == "ridge") {
+    augment_out <- list(method = "ridge", lambda = augment_lambda, tuning = augment_tuning,
+                        weights_scm = stats::setNames(lapply(out_list, function(z) z$aug$w_scm), nm))
+    if (length(augment_lambda) == 1L) {
+      dg <- do.call(rbind, lapply(out_list, function(z) z$aug$diag))
+      augment_out$diagnostics <- data.frame(treated_unit = treated_units, dg, row.names = NULL)
+    } else {
+      augment_out$path <- lapply(out_list, function(z) z$aug$path)
+    }
   }
 
   # -----------------------------
@@ -386,7 +451,8 @@ multiout_synth <- function(
     nu = nu,
     L = L,
     K = K,
-    fw_diagnostics = fw_diagnostics
+    fw_diagnostics = fw_diagnostics,
+    augment = augment_out
   )
 }
 

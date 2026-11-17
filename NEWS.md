@@ -1,3 +1,24 @@
+## augMultiSynth 0.3.9
+- Ridge-augmented synthetic control: `multiout_synth(augment = "ridge")` (Ben-Michael, Feller and
+  Rothstein, "The Augmented Synthetic Control Method", Lemma 1). The donors' pre-treatment features used
+  to fit the weights (all M outcomes stacked over the L pre periods, standardised, de-meaned and
+  pre-whitened as for the weights) are centred across donors, and the weights are corrected by
+  `A_c'(A_c A_c' + lambda I)^{-1}(y - A w)`, which equals SC plus a ridge outcome-model correction.
+  The augmented weights sum to one, can be negative (extrapolation outside the donors' convex hull),
+  and are common to all outcomes. They replace `weights`, so `tau`, `tau_inference()` and
+  `scm_gap_panel()` use them; the simplex weights are kept in `augment$weights_scm`, with per-unit
+  diagnostics (pre-period RMSE before/after, negative mass, size of the correction).
+- `tune_augment()`: chooses the relative penalty by in-time placebo forecasts (adoption moved back
+  `h` periods, refit, forecast the held-out pre periods), with a one-standard-error rule. Used by
+  default when `augment_lambda = NULL`.
+- `simulate_multi_outcome_panel(treated_loading_shift = )`: shifts treated units' loadings after
+  assignment, so treated units can sit outside the donors' convex hull (0 = unchanged, including the
+  random-number stream).
+- `run_demo()` passes `augment`, `augment_lambda`, `augment_tune`, and `...` (to the simulator).
+- Bayesian inference with augmented weights needs scmBayesPost >= 0.4.9 (negative weights in the
+  conditional likelihood).
+- `scripts/augment_experiment.R`.
+
 ## augMultiSynth 0.3.8
 - `fit_weights_fw()` now converges. It previously took plain Frank–Wolfe steps and stopped when the
   objective changed by less than `tol` between iterations; `multiout_synth()` called it with

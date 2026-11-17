@@ -28,7 +28,10 @@ multiout_synth(
   n_cores = max(1L, parallel::detectCores() - 1L),
   donors_list = NULL,
   fw_max_iter = 50000L,
-  fw_tol = 1e-08
+  fw_tol = 1e-08,
+  augment = c("none", "ridge"),
+  augment_lambda = NULL,
+  augment_tune = list()
 )
 }
 \arguments{
@@ -87,10 +90,29 @@ eligible pool as before. \code{NULL} (default) reproduces the previous behaviour
 \item{fw_max_iter, fw_tol}{Solver controls passed to \code{\link[=fit_weights_fw]{fit_weights_fw()}}: maximum
 iterations and tolerance on the relative Frank–Wolfe duality gap. Per-unit
 convergence is reported in \code{fw_diagnostics}.}
+
+\item{augment}{\code{"none"} (default) or \code{"ridge"}: ridge-augmented synthetic control
+(Ben-Michael, Feller and Rothstein, Lemma 1). The donors' pre-treatment features
+used to fit the weights (all outcomes stacked over the L pre periods, standardised and
+de-meaned as for the weights) are centred across donors, and the weights are
+corrected by \verb{A_c' (A_c A_c' + lambda I)^\{-1\} (y - A w)}. The corrected weights sum
+to one, can be negative (extrapolation outside the donors' convex hull), and are the
+same for all outcomes. They replace \code{weights} (the simplex weights are kept in
+\code{augment$weights_scm}), so \code{tau}, \code{\link[=tau_inference]{tau_inference()}} and \code{\link[=scm_gap_panel]{scm_gap_panel()}} use them.}
+
+\item{augment_lambda}{Ridge penalty relative to the mean eigenvalue of \verb{A_c A_c'}
+(\code{Inf} = no augmentation). \code{NULL} (default) chooses it with \code{\link[=tune_augment]{tune_augment()}}.
+A vector returns the weights for every value in \code{augment$path} (used for tuning)
+and leaves \code{weights} unaugmented.}
+
+\item{augment_tune}{List of further arguments for \code{\link[=tune_augment]{tune_augment()}} (e.g. \code{grid},
+\code{h}, \code{tune_units}, \code{one_se}).}
 }
 \value{
 A list with weights, donors, donor_ids, tau, treated_units, treated_unit_ids,
-unit_ids, pooled_beta0, pooled_adjustment, nu, L, K, fw_diagnostics. \code{L} and \code{K} let \code{\link[=tau_inference]{tau_inference()}}
+unit_ids, pooled_beta0, pooled_adjustment, nu, L, K, fw_diagnostics, augment
+(\code{NULL} unless \code{augment = "ridge"}: method, lambda, tuning, weights_scm, and per-unit
+diagnostics \code{pre_rmse_scm}, \code{pre_rmse_aug}, \code{neg_mass}, \code{corr_l1}). \code{L} and \code{K} let \code{\link[=tau_inference]{tau_inference()}}
 and the panel helpers default to the window used in fitting.
 }
 \description{

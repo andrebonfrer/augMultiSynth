@@ -1,7 +1,7 @@
 Package: augMultiSynth
 Type: Package
 Title: Multi-Outcome Partially-Pooled Synthetic Control at Scale
-Version: 0.3.8
+Version: 0.3.9
 Authors@R: person("Andre", "Bonfrer", role = c("aut","cre"), email = "andre.bonfrer@deakin.edu.au")
 Description: Multi-outcome synthetic control with scalable simplex solvers and unit-level treatment effects for staggered adoption panels.
 License: MIT + file LICENSE
@@ -13,7 +13,7 @@ Imports:
 Suggests:
     testthat,
     data.table,
-    scmBayesPost (>= 0.4.8),
+    scmBayesPost (>= 0.4.9),
     quadprog,
     knitr,
     rmarkdown

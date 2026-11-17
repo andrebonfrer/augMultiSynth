@@ -33,7 +33,11 @@ run_demo(
   holdout = 5,
   tune_units = 120,
   parallel_backend = c("none", "fork", "psock"),
-  n_cores = max(1L, parallel::detectCores() - 1L)
+  n_cores = max(1L, parallel::detectCores() - 1L),
+  augment = c("none", "ridge"),
+  augment_lambda = NULL,
+  augment_tune = list(),
+  ...
 )
 }
 \arguments{
@@ -98,6 +102,12 @@ the selected \code{nu} (returned as \code{nu_used}).}
 and (if used) \code{tune_lambda}.}
 
 \item{n_cores}{Integer. Number of workers/cores for the chosen backend.}
+
+\item{augment, augment_lambda, augment_tune}{Ridge augmentation, passed to
+\code{\link[=multiout_synth]{multiout_synth()}}.}
+
+\item{...}{Further arguments for \code{\link[=simulate_multi_outcome_panel]{simulate_multi_outcome_panel()}} (e.g.
+\code{treated_loading_shift}).}
 }
 \value{
 A list containing:

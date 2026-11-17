@@ -16,6 +16,10 @@
 #' @param outcome_specific_intercepts Logical. If TRUE, simulate outcome-specific unit and time intercepts
 #'   \eqn{\alpha_i^{(m)}} and \eqn{\delta_t^{(m)}}. If FALSE (default), use common \eqn{\alpha_i} and \eqn{\delta_t}
 #'   shared across outcomes.
+#' @param treated_loading_shift Numeric, length 1 or F. Added to the factor loadings of
+#'   treated units after treatment is assigned (a scalar shifts the first factor only),
+#'   so treated units can sit outside the convex hull of the donors' loadings.
+#'   0 (default) leaves the simulation and the random-number stream unchanged.
 #'
 #' @return List with Y0, Yobs, treat_time, treated, tau_unit, tau_true_event, and DGP components.
 #'
@@ -28,7 +32,8 @@ simulate_multi_outcome_panel <- function(
     alpha_sd = 0.5, delta_sd = 0.3,
     link_tau_to_loadings = FALSE,
     dynamic_te = FALSE,
-    outcome_specific_intercepts = FALSE
+    outcome_specific_intercepts = FALSE,
+    treated_loading_shift = 0
 ) {
   # --- Interactive fixed effects (factors) ---
   # f_t: T x F, lambda_i: N x F
@@ -78,6 +83,19 @@ simulate_multi_outcome_panel <- function(
   treat_time <- rep(Inf, N)
   possible_T <- (L + 5):(T - K - 5)
   treat_time[treated] <- sample(possible_T, length(treated), replace = TRUE)
+
+  # --- Optional selection on loadings: shift treated units' loadings ---
+  if (!is.numeric(treated_loading_shift) || !(length(treated_loading_shift) %in% c(1L, F))) {
+    stop("treated_loading_shift must be numeric of length 1 or F.")
+  }
+  shift <- if (length(treated_loading_shift) == 1L) c(treated_loading_shift, rep(0, F - 1L)) else treated_loading_shift
+  if (any(shift != 0)) {
+    lambda_i[treated, ] <- sweep(lambda_i[treated, , drop = FALSE], 2, shift, "+")
+    for (m in seq_len(M)) {
+      add <- as.numeric(t(f_t %*% Bm[[m]] %*% shift))        # length T
+      Y0[[m]][treated, ] <- Y0[[m]][treated, ] + matrix(add, length(treated), T, byrow = TRUE)
+    }
+  }
 
   # --- Heterogeneous treatment effects tau_i^{(m)} ---
   tau_unit <- matrix(0, nrow = N, ncol = M)
@@ -138,6 +156,7 @@ simulate_multi_outcome_panel <- function(
     Bm = Bm,
     link_tau_to_loadings = link_tau_to_loadings,
     dynamic_te = dynamic_te,
-    outcome_specific_intercepts = outcome_specific_intercepts
+    outcome_specific_intercepts = outcome_specific_intercepts,
+    treated_loading_shift = shift
   )
 }

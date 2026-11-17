@@ -33,6 +33,10 @@
 #' @param lambda_grid Numeric vector of candidate lambdas (only if tune_lambda=TRUE).
 #' @param holdout Integer. Holdout length for CV (only if tune_lambda=TRUE).
 #' @param tune_units Integer. Number of treated units used for CV (only if tune_lambda=TRUE).
+#' @param augment,augment_lambda,augment_tune Ridge augmentation, passed to
+#'   [multiout_synth()].
+#' @param ... Further arguments for [simulate_multi_outcome_panel()] (e.g.
+#'   `treated_loading_shift`).
 #' @param tune_nu Logical. If TRUE, runs \code{tune_nu()} at the chosen lambda and fits with
 #'   the selected \code{nu} (returned as \code{nu_used}).
 #'
@@ -80,7 +84,11 @@ run_demo <- function(
     holdout = 5,
     tune_units = 120,
     parallel_backend = c("none", "fork", "psock"),
-    n_cores = max(1L, parallel::detectCores() - 1L)
+    n_cores = max(1L, parallel::detectCores() - 1L),
+    augment = c("none", "ridge"),
+    augment_lambda = NULL,
+    augment_tune = list(),
+    ...
 ) {
   screen_method <- match.arg(screen_method)
   solver <- match.arg(solver)
@@ -91,7 +99,7 @@ run_demo <- function(
   if (!is.null(seed)) set.seed(seed)
 
   # 1) Simulate data (simulator does NOT take intercept)
-  sim <- simulate_multi_outcome_panel(N = N, T = T, M = M, K = K, L = L)
+  sim <- simulate_multi_outcome_panel(N = N, T = T, M = M, K = K, L = L, ...)
 
   # Stable unit IDs for downstream joins (and to test ID plumbing)
   unit_ids <- sprintf("U%06d", seq_len(N))
@@ -172,7 +180,10 @@ run_demo <- function(
     intercept = intercept,
     eps_sd = eps_sd,
     parallel_backend = parallel_backend,
-    n_cores = n_cores
+    n_cores = n_cores,
+    augment = match.arg(augment),
+    augment_lambda = augment_lambda,
+    augment_tune = augment_tune
   )
 
   # IMPORTANT: multiout_synth can filter treated_units for feasibility; use fit$treated_units
