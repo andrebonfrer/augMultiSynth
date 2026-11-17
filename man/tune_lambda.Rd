@@ -22,8 +22,8 @@ tune_lambda(
   time_weights = NULL,
   intercept = c("none", "global", "outcome"),
   solver = c("fw"),
-  max_iter = 800,
-  tol = 1e-05,
+  max_iter = 50000,
+  tol = 1e-06,
   seed = 1,
   verbose = FALSE,
   parallel_backend = c("none", "fork", "psock"),
@@ -69,9 +69,10 @@ tune_lambda(
 
 \item{solver}{Character. Currently \code{"fw"}.}
 
-\item{max_iter}{Integer. Max iterations for solver inside tuning (keep lower than main fit).}
+\item{max_iter}{Integer. Max iterations for \code{\link[=fit_weights_fw]{fit_weights_fw()}} inside tuning.}
 
-\item{tol}{Numeric. Tolerance for solver.}
+\item{tol}{Numeric. Tolerance on the relative Frank–Wolfe duality gap inside tuning
+(looser than the main fit's default is fine for ranking lambda values).}
 
 \item{seed}{Optional integer for reproducibility when \code{method="random"}.}
 

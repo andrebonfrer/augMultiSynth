@@ -26,7 +26,9 @@ multiout_synth(
   eps_sd = 1e-08,
   parallel_backend = c("none", "fork", "psock"),
   n_cores = max(1L, parallel::detectCores() - 1L),
-  donors_list = NULL
+  donors_list = NULL,
+  fw_max_iter = 50000L,
+  fw_tol = 1e-08
 )
 }
 \arguments{
@@ -81,10 +83,14 @@ treated unit id (as character) or, if unnamed, aligned with the treated units in
 \code{treated_units}. For a unit with an entry, screening runs inside that set (the eligibility
 rule \code{treat_time > treat_time[j] + K} still applies); units without an entry use the full
 eligible pool as before. \code{NULL} (default) reproduces the previous behaviour exactly.}
+
+\item{fw_max_iter, fw_tol}{Solver controls passed to \code{\link[=fit_weights_fw]{fit_weights_fw()}}: maximum
+iterations and tolerance on the relative Frank–Wolfe duality gap. Per-unit
+convergence is reported in \code{fw_diagnostics}.}
 }
 \value{
 A list with weights, donors, donor_ids, tau, treated_units, treated_unit_ids,
-unit_ids, pooled_beta0, pooled_adjustment, nu, L, K. \code{L} and \code{K} let \code{\link[=tau_inference]{tau_inference()}}
+unit_ids, pooled_beta0, pooled_adjustment, nu, L, K, fw_diagnostics. \code{L} and \code{K} let \code{\link[=tau_inference]{tau_inference()}}
 and the panel helpers default to the window used in fitting.
 }
 \description{

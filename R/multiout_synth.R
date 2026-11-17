@@ -29,6 +29,9 @@
 #' @param pooled_adjustment Logical; if TRUE fit pooled intercept adjustment per outcome.
 #' @param nu Nonnegative ridge penalty for pooled adjustment (per outcome).
 #' @param verbose Logical.
+#' @param fw_max_iter,fw_tol Solver controls passed to [fit_weights_fw()]: maximum
+#'   iterations and tolerance on the relative Frank–Wolfe duality gap. Per-unit
+#'   convergence is reported in `fw_diagnostics`.
 #' @param standardize_outcomes Logical; standardize each outcome block in X/y for weight fitting only.
 #' @param outcome_weights Optional length M weights on outcome blocks in the objective.
 #' @param time_weights Optional length L weights on pre-periods (shared across outcomes).
@@ -38,7 +41,7 @@
 #' @param n_cores Integer; number of cores/workers when parallel_backend != "none".
 #'
 #' @return A list with weights, donors, donor_ids, tau, treated_units, treated_unit_ids,
-#'   unit_ids, pooled_beta0, pooled_adjustment, nu, L, K. `L` and `K` let [tau_inference()]
+#'   unit_ids, pooled_beta0, pooled_adjustment, nu, L, K, fw_diagnostics. `L` and `K` let [tau_inference()]
 #'   and the panel helpers default to the window used in fitting.
 #'
 #' @export
@@ -62,7 +65,9 @@ multiout_synth <- function(
     eps_sd = 1e-8,
     parallel_backend = c("none", "fork", "psock"),
     n_cores = max(1L, parallel::detectCores() - 1L),
-    donors_list = NULL
+    donors_list = NULL,
+    fw_max_iter = 50000L,
+    fw_tol = 1e-8
 ) {
   # -----------------------------
   # Parse args / basic checks
@@ -225,8 +230,12 @@ multiout_synth <- function(
 
       w <- switch(
         solver,
-        fw = fit_weights_fw(Xw, yw, lambda = lambda, max_iter = 1000, tol = 1e-5, verbose = FALSE)
+        fw = fit_weights_fw(Xw, yw, lambda = lambda, max_iter = fw_max_iter, tol = fw_tol,
+                            verbose = FALSE)
       )
+      a_or_na <- function(nm) { v <- attr(w, nm); if (is.null(v)) NA_real_ else as.numeric(v) }
+      fw_diag <- c(rel_gap = a_or_na("fw_rel_gap"), iter = a_or_na("fw_iter"),
+                   converged = as.numeric(isTRUE(attr(w, "fw_converged"))))
 
       # normalize possible solver return types
       if (is.list(w)) {
@@ -239,7 +248,7 @@ multiout_synth <- function(
       if (length(w) != length(donors)) stop("Weight length mismatch with donors.")
       if (any(!is.finite(w))) stop("Non-finite weights returned by solver.")
 
-      list(ok = TRUE, j = j, donors = donors, w = w)
+      list(ok = TRUE, j = j, donors = donors, w = w, fw_diag = fw_diag)
     }, error = function(e) {
       list(ok = FALSE, j = j, msg = conditionMessage(e))
     })
@@ -265,7 +274,7 @@ multiout_synth <- function(
       "max_donors", "screen_outcome", "screen_method",
       "standardize_outcomes", "eps_sd",
       "ow", "tw", "row_w_base", "intercept",
-      "lambda", "solver", "cand_by_unit",
+      "lambda", "solver", "cand_by_unit", "fw_max_iter", "fw_tol",
       "donor_screen", "build_Xy_for_unit",
       "demean_within_outcome_blocks", "fit_weights_fw"
     ),
@@ -291,6 +300,18 @@ multiout_synth <- function(
       sprintf("Weight fitting failed for %d/%d treated units. Example errors: %s",
               length(bad), J, paste(head(msgs, 5), collapse = " | "))
     )
+  }
+
+  fw_diagnostics <- data.frame(
+    treated_unit = treated_units,
+    rel_gap = vapply(out_list, function(z) z$fw_diag[["rel_gap"]], numeric(1)),
+    iter = vapply(out_list, function(z) z$fw_diag[["iter"]], numeric(1)),
+    converged = vapply(out_list, function(z) z$fw_diag[["converged"]] == 1, logical(1))
+  )
+  if (!all(fw_diagnostics$converged)) {
+    warning(sprintf(paste0("fit_weights_fw() did not reach the duality-gap tolerance for %d of %d ",
+                           "treated units (max relative gap %.2g); see fit$fw_diagnostics and fw_max_iter."),
+                    sum(!fw_diagnostics$converged), J, max(fw_diagnostics$rel_gap)), call. = FALSE)
   }
 
   # unpack
@@ -364,7 +385,8 @@ multiout_synth <- function(
     pooled_adjustment = pooled_adjustment,
     nu = nu,
     L = L,
-    K = K
+    K = K,
+    fw_diagnostics = fw_diagnostics
   )
 }
 

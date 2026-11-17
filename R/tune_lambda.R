@@ -25,8 +25,9 @@
 #' @param time_weights Optional numeric length \code{L}. Time weights for objective.
 #' @param intercept Character. One of \code{"none","global","outcome"} intercept handling.
 #' @param solver Character. Currently \code{"fw"}.
-#' @param max_iter Integer. Max iterations for solver inside tuning (keep lower than main fit).
-#' @param tol Numeric. Tolerance for solver.
+#' @param max_iter Integer. Max iterations for [fit_weights_fw()] inside tuning.
+#' @param tol Numeric. Tolerance on the relative Frank–Wolfe duality gap inside tuning
+#'   (looser than the main fit's default is fine for ranking lambda values).
 #' @param seed Optional integer for reproducibility when \code{method="random"}.
 #' @param verbose Logical. Print progress.
 #' @param parallel_backend One of \code{"none","fork","psock"}.
@@ -72,8 +73,8 @@ tune_lambda <- function(
     time_weights = NULL,
     intercept = c("none", "global", "outcome"),
     solver = c("fw"),
-    max_iter = 800,
-    tol = 1e-5,
+    max_iter = 50000,
+    tol = 1e-6,
     seed = 1,
     verbose = FALSE,
     parallel_backend = c("none", "fork", "psock"),

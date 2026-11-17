@@ -1,3 +1,19 @@
+## augMultiSynth 0.3.8
+- `fit_weights_fw()` now converges. It previously took plain Frank–Wolfe steps and stopped when the
+  objective changed by less than `tol` between iterations; `multiout_synth()` called it with
+  `max_iter = 1000, tol = 1e-5`. In benchmarks on the simulated panel (100 and 500 donors) this left the
+  objective up to 3.5% and 5.9% above its minimum and the weights up to 0.32 and 0.64 (L1) from the
+  exact solution. The solver now uses pairwise Frank–Wolfe steps with exact line search and stops on the
+  Frank–Wolfe duality gap, which bounds the distance to the optimal objective (default relative gap
+  `1e-8`, `max_iter = 50000`). It matches an exact QP solution to about 1e-14 (relative objective) and
+  is 3-12x faster per unit. **Weights, and therefore tau, change for existing fits.**
+- `fit_weights_fw()` gains `w0` (warm start) and returns attributes `fw_gap`, `fw_rel_gap`, `fw_iter`,
+  `fw_converged`.
+- `multiout_synth()` gains `fw_max_iter` and `fw_tol`, returns `fw_diagnostics` (per-unit relative gap,
+  iterations, convergence), and warns if any unit did not converge.
+- `tune_lambda()` defaults `max_iter = 50000, tol = 1e-6`; `tune_nu()` uses `tol = 1e-6` (gap-based).
+- Matrix is no longer imported (it was only used by the old solver).
+
 ## augMultiSynth 0.3.7
 - New `tau_inference()`: unit-level estimate, standard error, t, p-value and interval for the average
   post-treatment effect `mean(fit$tau[j, m, post + 1])` (default `post = 1:K`, as in `eval_avg_1K()`).

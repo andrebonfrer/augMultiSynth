@@ -200,7 +200,7 @@ tune_nu <- function(
       # fit weights once (fixed lambda)
       w_hat <- switch(
         solver,
-        fw = fit_weights_fw(Xw, yw, lambda = lambda, max_iter = 800, tol = 1e-5, verbose = FALSE)
+        fw = fit_weights_fw(Xw, yw, lambda = lambda, tol = 1e-6, verbose = FALSE)
       )
       w_hat <- as.numeric(w_hat)
       if (length(w_hat) != length(donors)) stop("Weight length mismatch with donors.")

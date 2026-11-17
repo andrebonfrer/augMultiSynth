@@ -8,9 +8,10 @@ fit_weights_fw(
   X,
   y,
   lambda = 0.001,
-  max_iter = 2000,
-  tol = 1e-06,
-  verbose = FALSE
+  max_iter = 50000,
+  tol = 1e-08,
+  verbose = FALSE,
+  w0 = NULL
 )
 }
 \arguments{
@@ -20,14 +21,21 @@ fit_weights_fw(
 
 \item{lambda}{Nonnegative scalar ridge penalty on weights. Defaults to \code{1e-3}.}
 
-\item{max_iter}{Maximum number of Frank–Wolfe iterations. Defaults to \code{2000}.}
+\item{max_iter}{Maximum number of iterations. Defaults to \code{50000}.}
 
-\item{tol}{Convergence tolerance on objective improvement. Defaults to \code{1e-6}.}
+\item{tol}{Convergence tolerance on the Frank–Wolfe duality gap, relative to
+\code{max(1, f(w))}. Defaults to \code{1e-8}.}
 
 \item{verbose}{Logical. If \code{TRUE}, prints occasional progress messages.}
+
+\item{w0}{Optional starting weights (projected to the simplex by normalising
+their nonnegative part). Defaults to uniform weights.}
 }
 \value{
-Numeric vector of length \code{Nd} with simplex weights summing to 1.
+Numeric vector of length \code{Nd} with simplex weights summing to 1,
+with attributes \code{fw_gap} (final duality gap), \code{fw_rel_gap}
+(gap relative to \code{max(1, f(w))}), \code{fw_iter}, and
+\code{fw_converged}.
 }
 \description{
 Solves a simplex-constrained least squares problem
@@ -38,15 +46,19 @@ where \code{w} lies on the probability simplex (\code{w >= 0}, \code{sum(w)=1}).
 Designed for large donor sets with warm-start potential and low memory
 overhead, particularly when paired with donor screening.
 
-This routine:
-\itemize{
-\item Initializes weights uniformly on donors
-\item Computes quadratic objective and gradient in donor space
-\item Uses Frank–Wolfe direction to the best simplex vertex (coordinate descent-like)
-\item Performs exact line search for the quadratic objective
-}
+Pairwise Frank–Wolfe: each iteration moves weight from the active donor with
+the largest gradient (the "away" vertex) to the donor with the smallest
+gradient (the Frank–Wolfe vertex), with exact line search on the quadratic.
+The gradient is updated incrementally, so an iteration costs O(Nd) after
+forming \eqn{Q = X'X + \lambda I} once.
 
-For best results at scale, screen donors first to a manageable candidate set.
+Iteration stops when the Frank–Wolfe duality gap
+\deqn{g(w) = \nabla f(w)'(w - e_s),\quad s = \arg\min_i \nabla f(w)_i,}
+falls below \code{tol * max(1, f(w))}. Because \eqn{f} is convex,
+\eqn{f(w) - f^* \le g(w)}, so the gap certifies how far the objective is from
+its minimum. (Versions before 0.3.8 used plain Frank–Wolfe steps and stopped
+when the objective changed little between iterations, which could stop well
+short of the optimum.)
 }
 \examples{
 set.seed(1)
@@ -54,6 +66,7 @@ X <- matrix(rnorm(200*50), 200, 50)
 w_true <- rep(0, 50); w_true[c(3,10,25)] <- c(0.2, 0.5, 0.3)
 y <- X \%*\% w_true + rnorm(200, sd = 0.1)
 w_hat <- fit_weights_fw(X, as.numeric(y), lambda = 1e-4)
-sum(w_hat)  # should be ~1
+sum(w_hat)  # 1
+attr(w_hat, "fw_rel_gap")
 
 }

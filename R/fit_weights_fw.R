@@ -10,22 +10,32 @@
 #' @param X Numeric matrix of dimension \code{P x Nd}. Pre-treatment donor design.
 #' @param y Numeric vector of length \code{P}. Pre-treatment treated target.
 #' @param lambda Nonnegative scalar ridge penalty on weights. Defaults to \code{1e-3}.
-#' @param max_iter Maximum number of Frank–Wolfe iterations. Defaults to \code{2000}.
-#' @param tol Convergence tolerance on objective improvement. Defaults to \code{1e-6}.
+#' @param max_iter Maximum number of iterations. Defaults to \code{50000}.
+#' @param tol Convergence tolerance on the Frank–Wolfe duality gap, relative to
+#'   \code{max(1, f(w))}. Defaults to \code{1e-8}.
 #' @param verbose Logical. If \code{TRUE}, prints occasional progress messages.
+#' @param w0 Optional starting weights (projected to the simplex by normalising
+#'   their nonnegative part). Defaults to uniform weights.
 #'
 #' @details
-#' This routine:
-#' \itemize{
-#'   \item Initializes weights uniformly on donors
-#'   \item Computes quadratic objective and gradient in donor space
-#'   \item Uses Frank–Wolfe direction to the best simplex vertex (coordinate descent-like)
-#'   \item Performs exact line search for the quadratic objective
-#' }
+#' Pairwise Frank–Wolfe: each iteration moves weight from the active donor with
+#' the largest gradient (the "away" vertex) to the donor with the smallest
+#' gradient (the Frank–Wolfe vertex), with exact line search on the quadratic.
+#' The gradient is updated incrementally, so an iteration costs O(Nd) after
+#' forming \eqn{Q = X'X + \lambda I} once.
 #'
-#' For best results at scale, screen donors first to a manageable candidate set.
+#' Iteration stops when the Frank–Wolfe duality gap
+#' \deqn{g(w) = \nabla f(w)'(w - e_s),\quad s = \arg\min_i \nabla f(w)_i,}
+#' falls below \code{tol * max(1, f(w))}. Because \eqn{f} is convex,
+#' \eqn{f(w) - f^* \le g(w)}, so the gap certifies how far the objective is from
+#' its minimum. (Versions before 0.3.8 used plain Frank–Wolfe steps and stopped
+#' when the objective changed little between iterations, which could stop well
+#' short of the optimum.)
 #'
-#' @return Numeric vector of length \code{Nd} with simplex weights summing to 1.
+#' @return Numeric vector of length \code{Nd} with simplex weights summing to 1,
+#'   with attributes \code{fw_gap} (final duality gap), \code{fw_rel_gap}
+#'   (gap relative to \code{max(1, f(w))}), \code{fw_iter}, and
+#'   \code{fw_converged}.
 #'
 #' @examples
 #' set.seed(1)
@@ -33,62 +43,78 @@
 #' w_true <- rep(0, 50); w_true[c(3,10,25)] <- c(0.2, 0.5, 0.3)
 #' y <- X %*% w_true + rnorm(200, sd = 0.1)
 #' w_hat <- fit_weights_fw(X, as.numeric(y), lambda = 1e-4)
-#' sum(w_hat)  # should be ~1
+#' sum(w_hat)  # 1
+#' attr(w_hat, "fw_rel_gap")
 #'
 #' @export
 fit_weights_fw <- function(X, y, lambda = 1e-3,
-                           max_iter = 2000, tol = 1e-6, verbose = FALSE) {
+                           max_iter = 50000, tol = 1e-8, verbose = FALSE, w0 = NULL) {
 
-  if (!is.matrix(X)) stop("X must be a matrix.")
+  if (!is.matrix(X)) X <- as.matrix(X)
   if (!is.numeric(y)) stop("y must be numeric.")
+  y <- as.numeric(y)
   if (nrow(X) != length(y)) stop("nrow(X) must equal length(y).")
-  if (lambda < 0) stop("lambda must be nonnegative.")
+  if (!is.numeric(lambda) || length(lambda) != 1L || lambda < 0) stop("lambda must be nonnegative.")
 
   Nd <- ncol(X)
   if (Nd < 2) stop("Need at least 2 donors (ncol(X) >= 2).")
 
-  w <- rep(1 / Nd, Nd)
-  XtX <- crossprod(X)
-  Xty <- crossprod(X, y)
+  Q <- crossprod(X)
+  diag(Q) <- diag(Q) + lambda
+  b <- as.numeric(crossprod(X, y))
+  yy <- sum(y^2)
 
-  obj <- function(w) sum((y - X %*% w)^2) + lambda * sum(w^2)
-  grad <- function(w) as.numeric(2 * (XtX %*% w - Xty) + 2 * lambda * w)
-
-  f_prev <- obj(w)
-
-  # Use sparse diagonal if Matrix is available; otherwise base diag
-  if (requireNamespace("Matrix", quietly = TRUE)) {
-    Q <- XtX + lambda * Matrix::Diagonal(Nd)
+  if (is.null(w0)) {
+    w <- rep(1 / Nd, Nd)
   } else {
-    Q <- XtX + lambda * diag(Nd)
+    if (length(w0) != Nd) stop("w0 must have length ncol(X).")
+    w <- pmax(as.numeric(w0), 0)
+    if (sum(w) <= 0) w <- rep(1 / Nd, Nd)
+    w <- w / sum(w)
   }
+
+  Qw <- as.numeric(Q %*% w)
+  g <- 2 * (Qw - b)                       # gradient
+  f <- sum(w * Qw) - 2 * sum(b * w) + yy  # objective
+  gap <- Inf; it <- 0L; converged <- FALSE
 
   for (it in seq_len(max_iter)) {
-    g <- grad(w)
+    s <- which.min(g)
+    gap <- sum(g * w) - g[s]
+    if (gap <= tol * max(1, f)) { converged <- TRUE; break }
 
-    # best vertex: put all mass on smallest gradient coordinate
-    k <- which.min(g)
-    s <- rep(0, Nd); s[k] <- 1
-    d <- s - w
+    act <- which(w > 0)
+    v <- act[which.max(g[act])]
+    if (v == s) { converged <- TRUE; break }
 
-    num <- sum(g * d)
-    den <- 2 * sum(d * as.numeric(Q %*% d))  # base crossprod() only dispatches on Matrix classes from R 4.4
-    gamma <- if (den > 0) min(1, max(0, -num / den)) else 1
+    # pairwise direction d = e_s - e_v, exact line search, step <= w_v
+    dQd <- Q[s, s] + Q[v, v] - 2 * Q[s, v]
+    slope <- g[s] - g[v]                   # = g'd < 0
+    gam <- if (dQd > 0) -slope / (2 * dQd) else w[v]
+    gam <- min(max(gam, 0), w[v])
+    if (gam <= 0) { converged <- TRUE; break }
 
-    w_new <- w + gamma * d
-    f_new <- obj(w_new)
-
-    if (verbose && it %% 200 == 0) {
-      message(sprintf("iter %d: obj=%.6f, step=%.4g", it, f_new, gamma))
+    w[s] <- w[s] + gam
+    w[v] <- w[v] - gam
+    if (w[v] < 1e-15) w[v] <- 0
+    Qd <- Q[, s] - Q[, v]
+    f <- f + gam * slope + gam^2 * dQd
+    g <- g + 2 * gam * Qd
+    if (it %% 2000L == 0L) {               # refresh to avoid accumulated rounding
+      Qw <- as.numeric(Q %*% w)
+      g <- 2 * (Qw - b)
+      f <- sum(w * Qw) - 2 * sum(b * w) + yy
     }
 
-    if (abs(f_prev - f_new) < tol * (1 + abs(f_prev))) {
-      w <- w_new
-      break
+    if (verbose && it %% 1000 == 0) {
+      message(sprintf("iter %d: obj=%.8g, gap=%.3g", it, f, gap))
     }
-    w <- w_new
-    f_prev <- f_new
   }
 
+  w <- w / sum(w)
+  attr(w, "fw_gap") <- gap
+  attr(w, "fw_rel_gap") <- gap / max(1, f)
+  attr(w, "fw_iter") <- it
+  attr(w, "fw_converged") <- converged
   w
 }
