@@ -5,3 +5,6 @@ inst/doc
 .Rhistory
 .Rbuildignore
 .RData
+*.tar.gz
+*.Rcheck/
+.DS_Store
